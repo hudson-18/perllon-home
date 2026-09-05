@@ -1,0 +1,13 @@
+# PERLLON — Assistência Especializada Apple em Natal/RN
+# robots.txt NÃO é mecanismo de segurança: o painel admin é protegido
+# por autenticação + RLS no Supabase, independentemente deste arquivo.
+
+User-agent: *
+Allow: /
+
+# Não indexar o painel administrativo (defesa em profundidade p/ SEO;
+# o acesso continua bloqueado por Auth/RLS no servidor).
+Disallow: /admin.html
+
+# Sitemap (atualizar quando o catálogo público mudar).
+Sitemap: https://perllon.com.br/sitemap.xml
