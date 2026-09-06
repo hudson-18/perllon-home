@@ -11,6 +11,7 @@ import { isSupabaseConfigured } from '../lib/supabase.js';
 import * as admin from '../lib/admin.js';
 import { money } from '../lib/catalog.js';
 import { uploadProductImage, deleteProductImage } from '../lib/storage.js';
+import logoPerllonUrl from '../assets/images/logo-perllon.svg';
 
 const $ = (s, c = document) => c.querySelector(s);
 const root = () => $('#admin-root');
@@ -84,7 +85,7 @@ function shell(active, content) {
   return `
     <div class="admin-shell">
       <aside class="sidebar">
-        <img class="sidebar-logo" src="/src/assets/images/logo-perllon.svg" alt="PERLLON">
+        <img class="sidebar-logo" src="${logoPerllonUrl}" alt="PERLLON">
         <nav>
           <a href="#/dashboard" class="${active === 'dashboard' ? 'active' : ''}">Dashboard</a>
           <a href="#/products" class="${active === 'products' ? 'active' : ''}">Produtos</a>
@@ -115,7 +116,7 @@ function renderLogin() {
   root().innerHTML = `
     <div class="login-wrap">
       <div class="login-card">
-        <img class="login-logo" src="/src/assets/images/logo-perllon.svg" alt="PERLLON">
+        <img class="login-logo" src="${logoPerllonUrl}" alt="PERLLON">
         <h1>Acesso administrativo</h1>
         <p class="login-sub">Entre com suas credenciais PERLLON.</p>
         <form id="login-form">
@@ -626,7 +627,7 @@ function notConfigured() {
   return `
     <div class="login-wrap">
       <div class="login-card">
-        <img class="login-logo" src="/src/assets/images/logo-perllon.svg" alt="PERLLON">
+        <img class="login-logo" src="${logoPerllonUrl}" alt="PERLLON">
         <h1>Administração não configurada</h1>
         <p class="login-sub">
           Defina <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code>
