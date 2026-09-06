@@ -8,7 +8,8 @@ import './styles/base.css';
 import './styles/components.css';
 import './styles/sections.css';
 
-import { fetchProducts as fetchProductsRemote, fetchSpotlight, fetchCartValidation, isSupabaseConfigured } from './lib/catalog.js';
+import { fetchProducts as fetchProductsRemote, fetchSpotlight, fetchHeroMedia, fetchCartValidation, isSupabaseConfigured } from './lib/catalog.js';
+import { mediaPublicUrl, HERO_BUCKET } from './lib/storage.js';
 
 // ---------- Utils ----------
 const $ = (s, c = document) => c.querySelector(s);
@@ -641,10 +642,12 @@ async function initSpotlight() {
   if (p.installments) installEl.textContent = p.installments;
   else installEl.textContent = 'Consulte condições';
 
-  // Image (from product, if present)
+  // Image — prefer a custom promotional image, else the product's primary.
   const imgEl = $('#spotlight-image');
-  if (p.image) {
-    imgEl.src = p.image;
+  const overrideUrl = spot.imageOverride ? mediaPublicUrl('product-images', spot.imageOverride) : null;
+  const finalImg = overrideUrl || p.image;
+  if (finalImg) {
+    imgEl.src = finalImg;
     imgEl.alt = `${p.name}${p.storage ? ' ' + p.storage : ''} em destaque na PERLLON`;
   }
 
@@ -657,12 +660,61 @@ async function initSpotlight() {
   }
 }
 
+// ---------- Hero (dynamic media/editorial from Supabase) ----------
+// Reads the active hero_media row and swaps video/poster/title/subtitle/CTA.
+// Falls back to the static hero when Supabase is unconfigured or there is no
+// active config (resilient — never leaves a broken/empty hero).
+async function initHero() {
+  const root = $('#hero-video');
+  if (!root) return;
+  if (!isSupabaseConfigured()) return;   // keep static hero
+
+  let hero;
+  try {
+    hero = await fetchHeroMedia();
+  } catch (e) {
+    console.warn('[perllon] hero media load failed; using static hero.', e);
+    return;
+  }
+  if (!hero || !hero.active) return;     // inactive → fallback static
+
+  // Video
+  const videoUrl = hero.videoPath ? mediaPublicUrl(HERO_BUCKET, hero.videoPath) : null;
+  if (videoUrl) root.querySelector('source')?.setAttribute('src', videoUrl);
+
+  // Poster / fallback image
+  const posterUrl = hero.posterPath ? mediaPublicUrl(HERO_BUCKET, hero.posterPath) : null;
+  if (posterUrl) root.setAttribute('poster', posterUrl);
+
+  // Editorial title/subtitle (only when admin set something, preserve html accent)
+  if (hero.title) {
+    const t = $('#hero-title');
+    if (t) t.textContent = hero.title;
+  }
+  if (hero.subtitle) {
+    const l = $('#hero-lead');
+    if (l) l.textContent = hero.subtitle;
+  }
+
+  // Primary CTA (label + href)
+  const cta = $('#hero-cta');
+  if (cta) {
+    if (hero.ctaLabel) {
+      cta.innerHTML = `${esc(hero.ctaLabel)} <span class="arrow">→</span>`;
+    }
+    if (hero.ctaHref) {
+      cta.href = hero.ctaHref;
+    }
+  }
+}
+
 // ---------- Boot ----------
 document.addEventListener('DOMContentLoaded', () => {
   initHeader();
   initReveal();
   initCatalog();
   initSpotlight();
+  initHero();
   initCounters();
   initStatus();
   initWaFloat();
