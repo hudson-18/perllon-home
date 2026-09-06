@@ -49,7 +49,7 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 ## Rotas / 404
 - [x] `404.html` personalizada (identidade PERLLON, volta à home)
 - [x] `privacidade.html` (marcada como "em revisão jurídica")
-- [x] `_redirects` (admin + fallback) e `_headers` (segurança) para Netlify
+- [x] `_headers` (segurança) — honrado por Netlify e Cloudflare Pages; sem `_redirects` catch-all (causava loop no Cloudflare)
 - [ ] Para Vercel, adicionar `vercel.json` equivalente (headers/rewrites)
 
 ## Build

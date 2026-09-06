@@ -1,4 +1,4 @@
-# PERLLON — Netlify headers (security)
+# PERLLON — security headers (honored by Netlify AND Cloudflare Pages)
 # Aplicar em produção. Ajustar a CSP conforme o host/CDN real.
 
 /*

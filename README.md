@@ -140,10 +140,10 @@ npm run preview    # serve dist/ localmente p/ verificar o build final
 
 ### Hospedagem (recomendada: $0)
 - **Vercel** ou **Netlify** — deploy automático via Git, HTTPS, env vars, redirects.
-- **Cloudflare Pages** — alternativa gratuita com edge caching.
-- `public/_headers` e `public/_redirects` já contêm headers de segurança e o
-  mapeamento `/admin → admin.html` para Netlify. Para Vercel, use `vercel.json`
-  (headers + rewrites equivalentes).
+- **Cloudflare Pages** — alternativa gratuita com edge caching (já em uso em produção: `perllon-home.pages.dev`).
+- `public/_headers` contém os headers de segurança (honrado por Netlify e
+  Cloudflare Pages). Não use catch-all de redirect (`/* → index.html`) em
+  Cloudflare — causa loop em `/admin.html` (MPA, sem fallback de SPA).
 
 O `?motion=preview` é **apenas para desenvolvimento local** (restrito a
 localhost). Em produção o motion roda normalmente e respeita
