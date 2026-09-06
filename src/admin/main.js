@@ -10,7 +10,7 @@ import './admin.css';
 import { isSupabaseConfigured } from '../lib/supabase.js';
 import * as admin from '../lib/admin.js';
 import { money } from '../lib/catalog.js';
-import { uploadProductImage, deleteProductImage } from '../lib/storage.js';
+import { uploadProductImage, deleteProductImage, uploadMedia, deleteMedia, mediaPublicUrl, HERO_BUCKET } from '../lib/storage.js';
 import logoPerllonUrl from '../assets/images/logo-perllon.svg';
 
 const $ = (s, c = document) => c.querySelector(s);
@@ -40,6 +40,7 @@ const routes = {
   'products/new': renderProductForm,
   'products/:id': renderProductForm,
   spotlight: renderSpotlight,
+  hero: renderHero,
 };
 
 function parseHash() {
@@ -47,6 +48,7 @@ function parseHash() {
   if (!h || h === '' || h === 'login') return { name: 'login' };
   if (h === 'dashboard') return { name: 'dashboard' };
   if (h === 'spotlight') return { name: 'spotlight' };
+  if (h === 'hero') return { name: 'hero' };
   if (h === 'products') return { name: 'products' };
   if (h === 'products/new') return { name: 'products/new' };
   const m = h.match(/^products\/(.+)$/);
@@ -91,6 +93,7 @@ function shell(active, content) {
           <a href="#/products" class="${active === 'products' ? 'active' : ''}">Produtos</a>
           <a href="#/products/new" class="${active === 'product-new' ? 'active' : ''}">Novo produto</a>
           <a href="#/spotlight" class="${active === 'spotlight' ? 'active' : ''}">Destaque</a>
+          <a href="#/hero" class="${active === 'hero' ? 'active' : ''}">Hero</a>
         </nav>
         <div class="sidebar-footer">
           <div class="user">${esc(currentProfile?.full_name || currentProfile?.id || '')}</div>
@@ -575,6 +578,17 @@ async function renderSpotlight() {
             </select>
           </div>
           <div class="field" style="margin-top:12px">
+            <label>Imagem promocional do Spotlight (opcional)</label>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              ${spot?.image_path_override
+                ? `<img src="${esc(mediaPublicUrl('product-images', spot.image_path_override))}" alt="Prévia da imagem promocional" style="width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--border)">`
+                : `<span style="font-size:13px;color:var(--muted)">Nenhuma imagem personalizada.</span>`}
+              <input type="file" id="spot-image-input" accept="image/jpeg,image/png,image/webp,image/avif" style="max-width:220px">
+              ${spot?.image_path_override ? `<button type="button" id="spot-image-remove" class="btn btn-ghost">Remover</button>` : ''}
+            </div>
+            <p style="font-size:12px;color:var(--muted);margin-top:6px">Se vazio, usa a imagem principal do produto automaticamente.</p>
+          </div>
+          <div class="field" style="margin-top:12px">
             <label>Título editorial (opcional)</label>
             <input name="editorial_title" value="${esc(spot?.editorial_title || '')}" placeholder="Usa o nome do produto se vazio">
           </div>
@@ -599,6 +613,36 @@ async function renderSpotlight() {
         </div>
       </form>`);
 
+    // State for image override (updated by upload/remove handlers below)
+    let imageOverride = spot?.image_path_override || null;
+
+    const imgInput = $('#spot-image-input');
+    if (imgInput) {
+      imgInput.addEventListener('change', async () => {
+        const f = imgInput.files?.[0];
+        if (!f) return;
+        try {
+          toast('Enviando imagem…');
+          const { path } = await uploadMedia('product-images', f, 'spotlight', 'image');
+          imageOverride = path;
+          toast('Imagem enviada. Salve o destaque para aplicar.', 'success');
+          await renderSpotlight();   // re-render to show preview
+        } catch (err) { toast(err.message, 'error'); }
+      });
+    }
+    const rmBtn = $('#spot-image-remove');
+    if (rmBtn) {
+      rmBtn.addEventListener('click', async () => {
+        if (!imageOverride) return;
+        try {
+          await deleteMedia('product-images', imageOverride);
+          imageOverride = null;
+          toast('Imagem removida.', 'success');
+          await renderSpotlight();
+        } catch (err) { toast(err.message, 'error'); }
+      });
+    }
+
     $('#spot-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -612,6 +656,7 @@ async function renderSpotlight() {
           editorial_subtitle: (fd.get('editorial_subtitle') || '').toString().trim() || null,
           editorial_body: (fd.get('editorial_body') || '').toString().trim() || null,
           cta_label: (fd.get('cta_label') || '').toString().trim() || null,
+          image_path_override: imageOverride,
         });
         toast('Destaque atualizado.', 'success');
         router();
@@ -619,6 +664,127 @@ async function renderSpotlight() {
     });
   } catch (err) {
     root().innerHTML = shell('spotlight', `<div class="empty">Erro: ${esc(err.message)}</div>`);
+  }
+}
+
+// ---------- Hero media management ----------
+async function renderHero() {
+  root().innerHTML = shell('hero', `<div class="loading">Carregando…</div>`);
+  try {
+    const hero = await admin.getHeroMedia();
+
+    const videoUrl = hero?.video_path ? mediaPublicUrl(HERO_BUCKET, hero.video_path) : null;
+    const posterUrl = hero?.poster_path ? mediaPublicUrl(HERO_BUCKET, hero.poster_path) : null;
+
+    root().innerHTML = shell('hero', `
+      <div class="main-head"><h2>Hero principal</h2></div>
+      <form id="hero-form">
+        <div class="card" style="margin-bottom:16px">
+          <div class="field">
+            <label>Vídeo do Hero (atual se vazio)</label>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              ${videoUrl
+                ? `<video src="${esc(videoUrl)}" muted playsinline style="width:120px;height:68px;object-fit:cover;border-radius:8px;border:1px solid var(--border)"></video>`
+                : `<span style="font-size:13px;color:var(--muted)">Usando vídeo estático do build.</span>`}
+              <input type="file" id="hero-video-input" accept="video/mp4,video/webm,video/quicktime" style="max-width:220px">
+              ${hero?.video_path ? `<button type="button" id="hero-video-remove" class="btn btn-ghost">Remover</button>` : ''}
+            </div>
+            <p style="font-size:12px;color:var(--muted);margin-top:6px">MP4/WebM/MOV, máx. 25 MB. Vai para o Supabase Storage (fora do build).</p>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label>Poster / fallback do Hero (opcional)</label>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              ${posterUrl
+                ? `<img src="${esc(posterUrl)}" alt="Prévia do poster" style="width:96px;height:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`
+                : `<span style="font-size:13px;color:var(--muted)">Usando poster estático do build.</span>`}
+              <input type="file" id="hero-poster-input" accept="image/jpeg,image/png,image/webp,image/avif" style="max-width:220px">
+              ${hero?.poster_path ? `<button type="button" id="hero-poster-remove" class="btn btn-ghost">Remover</button>` : ''}
+            </div>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label>Título (opcional — mantém o atual se vazio)</label>
+            <input name="title" value="${esc(hero?.title || '')}" placeholder="Seu Apple merece um cuidado à altura.">
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label>Subtítulo (opcional)</label>
+            <input name="subtitle" value="${esc(hero?.subtitle || '')}" placeholder="Diagnóstico preciso, atendimento próximo…">
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label>Rótulo do CTA (opcional)</label>
+            <input name="cta_label" value="${esc(hero?.cta_label || '')}" placeholder="Solicitar Orçamento">
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label>Link do CTA (opcional — mantém o WhatsApp atual se vazio)</label>
+            <input name="cta_href" value="${esc(hero?.cta_href || '')}" placeholder="https://… (link do WhatsApp/outro)">
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-size:14px">
+            <input type="checkbox" name="active" ${hero === null || hero?.active !== false ? 'checked' : ''}> Ativo
+          </label>
+        </div>
+        <div style="display:flex;gap:12px;justify-content:flex-end">
+          <button type="submit" class="btn btn-orange btn-lg">Salvar e publicar Hero</button>
+        </div>
+      </form>`);
+
+    let videoPath = hero?.video_path || null;
+    let posterPath = hero?.poster_path || null;
+
+    const vInput = $('#hero-video-input');
+    if (vInput) vInput.addEventListener('change', async () => {
+      const f = vInput.files?.[0];
+      if (!f) return;
+      try {
+        toast('Enviando vídeo…');
+        const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'video');
+        videoPath = r.path;
+        toast('Vídeo enviado. Salve para publicar.', 'success');
+        await renderHero();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+    const vRm = $('#hero-video-remove');
+    if (vRm) vRm.addEventListener('click', async () => {
+      if (!videoPath) return;
+      try { await deleteMedia(HERO_BUCKET, videoPath); videoPath = null; toast('Vídeo removido.', 'success'); await renderHero(); }
+      catch (err) { toast(err.message, 'error'); }
+    });
+
+    const pInput = $('#hero-poster-input');
+    if (pInput) pInput.addEventListener('change', async () => {
+      const f = pInput.files?.[0];
+      if (!f) return;
+      try {
+        const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'image');
+        posterPath = r.path;
+        toast('Poster enviado. Salve para publicar.', 'success');
+        await renderHero();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+    const pRm = $('#hero-poster-remove');
+    if (pRm) pRm.addEventListener('click', async () => {
+      if (!posterPath) return;
+      try { await deleteMedia(HERO_BUCKET, posterPath); posterPath = null; toast('Poster removido.', 'success'); await renderHero(); }
+      catch (err) { toast(err.message, 'error'); }
+    });
+
+    $('#hero-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        await admin.setHeroMedia({
+          video_path: videoPath,
+          poster_path: posterPath,
+          title: (fd.get('title') || '').toString().trim() || null,
+          subtitle: (fd.get('subtitle') || '').toString().trim() || null,
+          cta_label: (fd.get('cta_label') || '').toString().trim() || null,
+          cta_href: (fd.get('cta_href') || '').toString().trim() || null,
+          active: fd.get('active') === 'on',
+        });
+        toast('Hero publicado.', 'success');
+        router();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  } catch (err) {
+    root().innerHTML = shell('hero', `<div class="empty">Erro: ${esc(err.message)}</div>`);
   }
 }
 

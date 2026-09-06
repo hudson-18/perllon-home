@@ -145,6 +145,33 @@ export async function fetchSpotlight() {
   };
 }
 
+// ---------- Hero media (dynamic hero video/poster/editorial) ----------
+// Returns the active hero_media row (or null). The public site falls back to
+// the static hero when there is no active config (prototype/offline).
+export async function fetchHeroMedia() {
+  const sb = await getSupabase();
+  if (!sb) throw new Error('Supabase not configured');
+  const { data, error } = await sb
+    .from('hero_media')
+    .select('id, video_path, poster_path, title, subtitle, cta_label, cta_href, active')
+    .eq('active', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    videoPath: data.video_path,
+    posterPath: data.poster_path,
+    title: data.title,
+    subtitle: data.subtitle,
+    ctaLabel: data.cta_label,
+    ctaHref: data.cta_href,
+    active: data.active,
+  };
+}
+
 // ---------- Cart validation (price/product re-read from DB) ----------
 // Returns a map id -> { price_cents, status, name } so the client can
 // reject stale prices and deactivated/archived items at checkout.

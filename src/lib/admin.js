@@ -231,6 +231,33 @@ export async function setSpotlight({ product_id, active, editorial_title, editor
   return data;
 }
 
+// ---------- hero media ----------
+export async function getHeroMedia() {
+  const sb = await getSupabase();
+  const { data, error } = await sb.from('hero_media').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function setHeroMedia({ video_path, poster_path, title, subtitle, cta_label, cta_href, active }) {
+  const sb = await getSupabase();
+  const existing = await getHeroMedia();
+  if (existing) {
+    const { data, error } = await sb.from('hero_media')
+      .update({ video_path, poster_path, title, subtitle, cta_label, cta_href, active })
+      .eq('id', existing.id).select().single();
+    if (error) throw error;
+    await writeAudit({ action: 'hero_media.updated', entity: 'hero_media', entityId: data.id, before: existing, after: data });
+    return data;
+  }
+  const { data, error } = await sb.from('hero_media')
+    .insert({ video_path, poster_path, title, subtitle, cta_label, cta_href, active: active ?? true })
+    .select().single();
+  if (error) throw error;
+  await writeAudit({ action: 'hero_media.created', entity: 'hero_media', entityId: data.id, after: data });
+  return data;
+}
+
 // ---------- dashboard stats ----------
 export async function dashboardStats() {
   const sb = await getSupabase();
