@@ -8,7 +8,7 @@ import './styles/base.css';
 import './styles/components.css';
 import './styles/sections.css';
 
-import { fetchProducts as fetchProductsRemote, fetchCartValidation, isSupabaseConfigured } from './lib/catalog.js';
+import { fetchProducts as fetchProductsRemote, fetchSpotlight, fetchCartValidation, isSupabaseConfigured } from './lib/catalog.js';
 
 // ---------- Utils ----------
 const $ = (s, c = document) => c.querySelector(s);
@@ -595,11 +595,74 @@ function initHeroEntrance() {
   }));
 }
 
+// ---------- Spotlight (dynamic: product selected in Admin) ----------
+// The public Spotlight section renders the product the admin chose in the
+// "Destaque" area. Source of truth is Supabase (`spotlight` table). The
+// static iPhone 17 markup in index.html remains as a graceful fallback for
+// when the backend is not configured (prototype/offline).
+async function initSpotlight() {
+  const elName = $('#spotlight-name');
+  if (!elName) return;                  // section not present
+  if (!isSupabaseConfigured()) return;  // keep static fallback value
+
+  let spot;
+  try {
+    spot = await fetchSpotlight();
+  } catch (e) {
+    console.warn('[perllon] spotlight load failed; using static fallback.', e);
+    return;
+  }
+  if (!spot || !spot.product) return;   // no active spotlight → keep fallback
+
+  const p = spot.product;
+
+  // Name
+  elName.textContent = p.name;
+
+  // Editorial description (if admin set one, else keep existing text)
+  if (spot.editorialBody) $('#spotlight-desc').textContent = spot.editorialBody;
+
+  // Specs grid (derive from product specs — only confirmed fields)
+  const specs = [];
+  if (p.storage) specs.push(['Armazenamento', p.storage]);
+  if (p.color) specs.push(['Cor', p.color]);
+  if (p.condition) specs.push(['Estado', p.condition]);
+  if (p.simType) specs.push(['Chip', p.simType]);
+  if (p.warranty) specs.push(['Garantia', p.warranty]);
+  if (p.battery) specs.push(['Bateria', p.battery]);
+  const specsEl = $('#spotlight-specs');
+  if (specsEl && specs.length) {
+    specsEl.innerHTML = specs.map(([k, v]) => `<div class="spec-item"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('');
+  }
+
+  // Price + installments
+  if (p.priceFormatted) $('#spotlight-price').textContent = p.priceFormatted;
+  const installEl = $('#spotlight-install');
+  if (p.installments) installEl.textContent = p.installments;
+  else installEl.textContent = 'Consulte condições';
+
+  // Image (from product, if present)
+  const imgEl = $('#spotlight-image');
+  if (p.image) {
+    imgEl.src = p.image;
+    imgEl.alt = `${p.name}${p.storage ? ' ' + p.storage : ''} em destaque na PERLLON`;
+  }
+
+  // WhatsApp CTA → contextualized to the selected product
+  const waEl = $('#spotlight-wa');
+  if (waEl) {
+    const parts = [p.name, p.storage, p.color].filter(Boolean).join(', ');
+    const msg = `Olá! Tenho interesse no ${parts}. Gostaria de saber mais.`;
+    waEl.href = waUrl(msg);
+  }
+}
+
 // ---------- Boot ----------
 document.addEventListener('DOMContentLoaded', () => {
   initHeader();
   initReveal();
   initCatalog();
+  initSpotlight();
   initCounters();
   initStatus();
   initWaFloat();
