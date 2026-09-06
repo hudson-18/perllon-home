@@ -122,7 +122,7 @@ export async function fetchSpotlight() {
     .select(`
       id, active, editorial_title, editorial_subtitle, editorial_body,
       image_path_override, video_path_override, cta_label,
-      product:products(${PRODUCT_SELECT}, product_specifications(key, value, sort_order))
+      product:products(${PRODUCT_SELECT}, product_specifications(key, value, sort_order), product_images(storage_path, alt_text, is_primary, sort_order))
     `)
     .eq('active', true)
     .order('sort_order', { ascending: true })
