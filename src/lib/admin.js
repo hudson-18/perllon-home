@@ -239,19 +239,27 @@ export async function getHeroMedia() {
   return data || null;
 }
 
-export async function setHeroMedia({ video_path, poster_path, title, subtitle, cta_label, cta_href, active }) {
+export async function setHeroMedia(fields) {
   const sb = await getSupabase();
+  // Only touch fields actually provided (key present) — prevents a stale or
+  // unrelated caller from clobbering video_path/poster_path when it only
+  // means to edit the title. Explicit null still clears a field.
+  const KEYS = ['video_path', 'poster_path', 'title', 'subtitle', 'cta_label', 'cta_href', 'active'];
+  const patch = {};
+  for (const k of KEYS) {
+    if (k in fields) patch[k] = fields[k] ?? null;
+  }
   const existing = await getHeroMedia();
   if (existing) {
     const { data, error } = await sb.from('hero_media')
-      .update({ video_path, poster_path, title, subtitle, cta_label, cta_href, active })
+      .update(patch)
       .eq('id', existing.id).select().single();
     if (error) throw error;
     await writeAudit({ action: 'hero_media.updated', entity: 'hero_media', entityId: data.id, before: existing, after: data });
     return data;
   }
   const { data, error } = await sb.from('hero_media')
-    .insert({ video_path, poster_path, title, subtitle, cta_label, cta_href, active: active ?? true })
+    .insert({ ...patch, active: patch.active ?? true })
     .select().single();
   if (error) throw error;
   await writeAudit({ action: 'hero_media.created', entity: 'hero_media', entityId: data.id, after: data });

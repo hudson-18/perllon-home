@@ -763,15 +763,7 @@ async function renderHero() {
       try {
         toast('Enviando vídeo…');
         const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'video');
-        await admin.setHeroMedia({
-          video_path: r.path,
-          poster_path: hero?.poster_path ?? null,
-          title: hero?.title ?? null,
-          subtitle: hero?.subtitle ?? null,
-          cta_label: hero?.cta_label ?? null,
-          cta_href: hero?.cta_href ?? null,
-          active: hero?.active ?? true,
-        });
+        await admin.setHeroMedia({ video_path: r.path });
         toast('Vídeo do Hero atualizado com sucesso.', 'success');
         await renderHero();
       } catch (err) { toast(err.message || 'Não foi possível enviar o vídeo. Verifique o formato e tente novamente.', 'error'); vInput.disabled = false; }
@@ -780,15 +772,7 @@ async function renderHero() {
       vRm.disabled = true;
       try {
         await deleteMedia(HERO_BUCKET, hero.video_path);
-        await admin.setHeroMedia({
-          video_path: null,
-          poster_path: hero?.poster_path ?? null,
-          title: hero?.title ?? null,
-          subtitle: hero?.subtitle ?? null,
-          cta_label: hero?.cta_label ?? null,
-          cta_href: hero?.cta_href ?? null,
-          active: hero?.active ?? true,
-        });
+        await admin.setHeroMedia({ video_path: null });
         toast('Vídeo personalizado removido. Site usa o vídeo padrão.', 'success');
         await renderHero();
       } catch (err) { toast(err.message || 'Não foi possível remover o vídeo.', 'error'); vRm.disabled = false; }
@@ -803,15 +787,7 @@ async function renderHero() {
       try {
         toast('Enviando imagem…');
         const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'image');
-        await admin.setHeroMedia({
-          video_path: hero?.video_path ?? null,
-          poster_path: r.path,
-          title: hero?.title ?? null,
-          subtitle: hero?.subtitle ?? null,
-          cta_label: hero?.cta_label ?? null,
-          cta_href: hero?.cta_href ?? null,
-          active: hero?.active ?? true,
-        });
+        await admin.setHeroMedia({ poster_path: r.path });
         toast('Imagem de capa atualizada com sucesso.', 'success');
         await renderHero();
       } catch (err) { toast(err.message || 'Não foi possível enviar a imagem.', 'error'); pInput.disabled = false; }
@@ -820,15 +796,7 @@ async function renderHero() {
       pRm.disabled = true;
       try {
         await deleteMedia(HERO_BUCKET, hero.poster_path);
-        await admin.setHeroMedia({
-          video_path: hero?.video_path ?? null,
-          poster_path: null,
-          title: hero?.title ?? null,
-          subtitle: hero?.subtitle ?? null,
-          cta_label: hero?.cta_label ?? null,
-          cta_href: hero?.cta_href ?? null,
-          active: hero?.active ?? true,
-        });
+        await admin.setHeroMedia({ poster_path: null });
         toast('Imagem de capa removida. Site usa a imagem padrão.', 'success');
         await renderHero();
       } catch (err) { toast(err.message || 'Não foi possível remover a imagem.', 'error'); pRm.disabled = false; }
@@ -838,9 +806,10 @@ async function renderHero() {
       e.preventDefault();
       const fd = new FormData(e.target);
       try {
+        // Editorial + publish only — do NOT send video/poster paths, leaving
+        // the uploaded media intact (upload/remove buttons already persist
+        // those immediately).
         await admin.setHeroMedia({
-          video_path: hero?.video_path ?? null,
-          poster_path: hero?.poster_path ?? null,
           title: (fd.get('title') || '').toString().trim() || null,
           subtitle: (fd.get('subtitle') || '').toString().trim() || null,
           cta_label: (fd.get('cta_label') || '').toString().trim() || null,
