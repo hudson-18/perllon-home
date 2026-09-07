@@ -565,6 +565,7 @@ async function renderSpotlight() {
     ]);
     const activeProducts = products.filter((p) => p.status === 'active');
     const catById = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+    const overrideUrl = spot?.image_path_override ? mediaPublicUrl('product-images', spot.image_path_override) : null;
 
     root().innerHTML = shell('spotlight', `
       <div class="main-head"><h2>Produto em destaque</h2></div>
@@ -577,18 +578,21 @@ async function renderSpotlight() {
               ${activeProducts.map((p) => `<option value="${p.id}" ${spot?.product_id === p.id ? 'selected' : ''}>${esc(p.name)}${p.category_id ? ' (' + esc(catById[p.category_id] || '') + ')' : ''}</option>`).join('')}
             </select>
           </div>
-          <div class="field" style="margin-top:12px">
-            <label>Imagem promocional do Spotlight (opcional)</label>
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-              ${spot?.image_path_override
-                ? `<img src="${esc(mediaPublicUrl('product-images', spot.image_path_override))}" alt="Prévia da imagem promocional" style="width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--border)">`
-                : `<span style="font-size:13px;color:var(--muted)">Nenhuma imagem personalizada.</span>`}
-              <input type="file" id="spot-image-input" accept="image/jpeg,image/png,image/webp,image/avif" style="max-width:220px">
-              ${spot?.image_path_override ? `<button type="button" id="spot-image-remove" class="btn btn-ghost">Remover</button>` : ''}
+          <div class="field" style="margin-top:16px">
+            <label>Imagem do destaque</label>
+            <p style="font-size:12px;color:var(--muted);margin:4px 0 8px">Por padrão, o destaque usa a imagem principal do produto. Você pode trocar por uma imagem personalizada.</p>
+            <div class="media-picker">
+              ${overrideUrl
+                ? `<img src="${esc(overrideUrl)}" alt="Imagem personalizada do destaque">`
+                : `<div class="media-empty">Usando a imagem do produto</div>`}
+              <div class="media-actions">
+                <label class="btn btn-ghost btn-sm" for="spot-image-input">Escolher imagem</label>
+                <input type="file" id="spot-image-input" accept="image/jpeg,image/png,image/webp,image/avif" hidden>
+                ${spot?.image_path_override ? `<button type="button" id="spot-image-remove" class="btn btn-ghost btn-sm">Remover imagem personalizada</button>` : ''}
+              </div>
             </div>
-            <p style="font-size:12px;color:var(--muted);margin-top:6px">Se vazio, usa a imagem principal do produto automaticamente.</p>
           </div>
-          <div class="field" style="margin-top:12px">
+          <div class="field" style="margin-top:16px">
             <label>Título editorial (opcional)</label>
             <input name="editorial_title" value="${esc(spot?.editorial_title || '')}" placeholder="Usa o nome do produto se vazio">
           </div>
@@ -605,7 +609,7 @@ async function renderSpotlight() {
             <input name="cta_label" value="${esc(spot?.cta_label || '')}" placeholder="Consultar pelo WhatsApp">
           </div>
           <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-size:14px">
-            <input type="checkbox" name="active" ${spot?.active === false ? '' : 'checked'}> Ativo
+            <input type="checkbox" name="active" ${spot?.active === false ? '' : 'checked'}> Em destaque no site
           </label>
         </div>
         <div style="display:flex;gap:12px;justify-content:flex-end">
@@ -613,35 +617,47 @@ async function renderSpotlight() {
         </div>
       </form>`);
 
-    // State for image override (updated by upload/remove handlers below)
-    let imageOverride = spot?.image_path_override || null;
-
+    // ---- Image picker: upload persists immediately, remove clears ----
     const imgInput = $('#spot-image-input');
-    if (imgInput) {
-      imgInput.addEventListener('change', async () => {
-        const f = imgInput.files?.[0];
-        if (!f) return;
-        try {
-          toast('Enviando imagem…');
-          const { path } = await uploadMedia('product-images', f, 'spotlight', 'image');
-          imageOverride = path;
-          toast('Imagem enviada. Salve o destaque para aplicar.', 'success');
-          await renderSpotlight();   // re-render to show preview
-        } catch (err) { toast(err.message, 'error'); }
-      });
-    }
     const rmBtn = $('#spot-image-remove');
-    if (rmBtn) {
-      rmBtn.addEventListener('click', async () => {
-        if (!imageOverride) return;
-        try {
-          await deleteMedia('product-images', imageOverride);
-          imageOverride = null;
-          toast('Imagem removida.', 'success');
-          await renderSpotlight();
-        } catch (err) { toast(err.message, 'error'); }
-      });
-    }
+    if (imgInput) imgInput.addEventListener('change', async () => {
+      const f = imgInput.files?.[0];
+      if (!f) return;
+      imgInput.disabled = true;
+      try {
+        toast('Enviando imagem…');
+        const { path } = await uploadMedia('product-images', f, 'spotlight', 'image');
+        // Persist immediately so the preview + public site reflect it at once.
+        await admin.setSpotlight({
+          product_id: spot?.product_id || $('#spot-form [name=product_id]')?.value,
+          active: spot?.active ?? true,
+          editorial_title: spot?.editorial_title ?? null,
+          editorial_subtitle: spot?.editorial_subtitle ?? null,
+          editorial_body: spot?.editorial_body ?? null,
+          cta_label: spot?.cta_label ?? null,
+          image_path_override: path,
+        });
+        toast('Imagem do destaque atualizada com sucesso.', 'success');
+        await renderSpotlight();
+      } catch (err) { toast(err.message || 'Não foi possível enviar a imagem.', 'error'); imgInput.disabled = false; }
+    });
+    if (rmBtn) rmBtn.addEventListener('click', async () => {
+      rmBtn.disabled = true;
+      try {
+        await deleteMedia('product-images', spot.image_path_override);
+        await admin.setSpotlight({
+          product_id: spot?.product_id,
+          active: spot?.active ?? true,
+          editorial_title: spot?.editorial_title ?? null,
+          editorial_subtitle: spot?.editorial_subtitle ?? null,
+          editorial_body: spot?.editorial_body ?? null,
+          cta_label: spot?.cta_label ?? null,
+          image_path_override: null,
+        });
+        toast('Imagem personalizada removida. Usando a imagem do produto.', 'success');
+        await renderSpotlight();
+      } catch (err) { toast(err.message || 'Não foi possível remover a imagem.', 'error'); rmBtn.disabled = false; }
+    });
 
     $('#spot-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -656,11 +672,11 @@ async function renderSpotlight() {
           editorial_subtitle: (fd.get('editorial_subtitle') || '').toString().trim() || null,
           editorial_body: (fd.get('editorial_body') || '').toString().trim() || null,
           cta_label: (fd.get('cta_label') || '').toString().trim() || null,
-          image_path_override: imageOverride,
+          image_path_override: spot?.image_path_override ?? null,
         });
-        toast('Destaque atualizado.', 'success');
+        toast('Destaque publicado.', 'success');
         router();
-      } catch (err) { toast(err.message, 'error'); }
+      } catch (err) { toast(err.message || 'Não foi possível salvar o destaque.', 'error'); }
     });
   } catch (err) {
     root().innerHTML = shell('spotlight', `<div class="empty">Erro: ${esc(err.message)}</div>`);
@@ -680,28 +696,39 @@ async function renderHero() {
       <div class="main-head"><h2>Hero principal</h2></div>
       <form id="hero-form">
         <div class="card" style="margin-bottom:16px">
+
           <div class="field">
-            <label>Vídeo do Hero (atual se vazio)</label>
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <label>Vídeo do Hero</label>
+            <p style="font-size:12px;color:var(--muted);margin:4px 0 8px">Se nenhum vídeo novo for enviado, o site continua usando o vídeo atual.</p>
+            <div class="media-picker">
               ${videoUrl
-                ? `<video src="${esc(videoUrl)}" muted playsinline style="width:120px;height:68px;object-fit:cover;border-radius:8px;border:1px solid var(--border)"></video>`
-                : `<span style="font-size:13px;color:var(--muted)">Usando vídeo estático do build.</span>`}
-              <input type="file" id="hero-video-input" accept="video/mp4,video/webm,video/quicktime" style="max-width:220px">
-              ${hero?.video_path ? `<button type="button" id="hero-video-remove" class="btn btn-ghost">Remover</button>` : ''}
+                ? `<video src="${esc(videoUrl)}" muted playsinline controls></video>`
+                : `<div class="media-empty">Usando o vídeo padrão do site</div>`}
+              <div class="media-actions">
+                <label class="btn btn-ghost btn-sm" for="hero-video-input">Escolher vídeo</label>
+                <input type="file" id="hero-video-input" accept="video/mp4,video/webm,video/quicktime" hidden>
+                ${hero?.video_path ? `<button type="button" id="hero-video-remove" class="btn btn-ghost btn-sm">Remover vídeo personalizado</button>` : ''}
+              </div>
             </div>
-            <p style="font-size:12px;color:var(--muted);margin-top:6px">MP4/WebM/MOV, máx. 25 MB. Vai para o Supabase Storage (fora do build).</p>
+            <p style="font-size:12px;color:var(--muted);margin-top:6px">MP4, WebM ou MOV • até 25 MB.</p>
           </div>
-          <div class="field" style="margin-top:12px">
-            <label>Poster / fallback do Hero (opcional)</label>
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+
+          <div class="field" style="margin-top:16px">
+            <label>Imagem de capa do vídeo</label>
+            <p style="font-size:12px;color:var(--muted);margin:4px 0 8px">Imagem exibida enquanto o vídeo não estiver sendo reproduzido. Se vazio, será usada a imagem padrão do site.</p>
+            <div class="media-picker">
               ${posterUrl
-                ? `<img src="${esc(posterUrl)}" alt="Prévia do poster" style="width:96px;height:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`
-                : `<span style="font-size:13px;color:var(--muted)">Usando poster estático do build.</span>`}
-              <input type="file" id="hero-poster-input" accept="image/jpeg,image/png,image/webp,image/avif" style="max-width:220px">
-              ${hero?.poster_path ? `<button type="button" id="hero-poster-remove" class="btn btn-ghost">Remover</button>` : ''}
+                ? `<img src="${esc(posterUrl)}" alt="Imagem de capa do vídeo">`
+                : `<div class="media-empty">Usando a imagem padrão do site</div>`}
+              <div class="media-actions">
+                <label class="btn btn-ghost btn-sm" for="hero-poster-input">Escolher imagem</label>
+                <input type="file" id="hero-poster-input" accept="image/jpeg,image/png,image/webp,image/avif" hidden>
+                ${hero?.poster_path ? `<button type="button" id="hero-poster-remove" class="btn btn-ghost btn-sm">Remover imagem personalizada</button>` : ''}
+              </div>
             </div>
           </div>
-          <div class="field" style="margin-top:12px">
+
+          <div class="field" style="margin-top:16px">
             <label>Título (opcional — mantém o atual se vazio)</label>
             <input name="title" value="${esc(hero?.title || '')}" placeholder="Seu Apple merece um cuidado à altura.">
           </div>
@@ -710,15 +737,15 @@ async function renderHero() {
             <input name="subtitle" value="${esc(hero?.subtitle || '')}" placeholder="Diagnóstico preciso, atendimento próximo…">
           </div>
           <div class="field" style="margin-top:12px">
-            <label>Rótulo do CTA (opcional)</label>
+            <label>Rótulo do botão (opcional)</label>
             <input name="cta_label" value="${esc(hero?.cta_label || '')}" placeholder="Solicitar Orçamento">
           </div>
           <div class="field" style="margin-top:12px">
-            <label>Link do CTA (opcional — mantém o WhatsApp atual se vazio)</label>
+            <label>Link do botão (opcional — mantém o WhatsApp atual se vazio)</label>
             <input name="cta_href" value="${esc(hero?.cta_href || '')}" placeholder="https://… (link do WhatsApp/outro)">
           </div>
           <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-size:14px">
-            <input type="checkbox" name="active" ${hero === null || hero?.active !== false ? 'checked' : ''}> Ativo
+            <input type="checkbox" name="active" ${hero === null || hero?.active !== false ? 'checked' : ''}> Hero ativo no site
           </label>
         </div>
         <div style="display:flex;gap:12px;justify-content:flex-end">
@@ -726,44 +753,85 @@ async function renderHero() {
         </div>
       </form>`);
 
-    let videoPath = hero?.video_path || null;
-    let posterPath = hero?.poster_path || null;
-
+    // ---- Media uploads persist immediately; remove clears back to default ----
     const vInput = $('#hero-video-input');
+    const vRm = $('#hero-video-remove');
     if (vInput) vInput.addEventListener('change', async () => {
       const f = vInput.files?.[0];
       if (!f) return;
+      vInput.disabled = true;
       try {
         toast('Enviando vídeo…');
         const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'video');
-        videoPath = r.path;
-        toast('Vídeo enviado. Salve para publicar.', 'success');
+        await admin.setHeroMedia({
+          video_path: r.path,
+          poster_path: hero?.poster_path ?? null,
+          title: hero?.title ?? null,
+          subtitle: hero?.subtitle ?? null,
+          cta_label: hero?.cta_label ?? null,
+          cta_href: hero?.cta_href ?? null,
+          active: hero?.active ?? true,
+        });
+        toast('Vídeo do Hero atualizado com sucesso.', 'success');
         await renderHero();
-      } catch (err) { toast(err.message, 'error'); }
+      } catch (err) { toast(err.message || 'Não foi possível enviar o vídeo. Verifique o formato e tente novamente.', 'error'); vInput.disabled = false; }
     });
-    const vRm = $('#hero-video-remove');
     if (vRm) vRm.addEventListener('click', async () => {
-      if (!videoPath) return;
-      try { await deleteMedia(HERO_BUCKET, videoPath); videoPath = null; toast('Vídeo removido.', 'success'); await renderHero(); }
-      catch (err) { toast(err.message, 'error'); }
+      vRm.disabled = true;
+      try {
+        await deleteMedia(HERO_BUCKET, hero.video_path);
+        await admin.setHeroMedia({
+          video_path: null,
+          poster_path: hero?.poster_path ?? null,
+          title: hero?.title ?? null,
+          subtitle: hero?.subtitle ?? null,
+          cta_label: hero?.cta_label ?? null,
+          cta_href: hero?.cta_href ?? null,
+          active: hero?.active ?? true,
+        });
+        toast('Vídeo personalizado removido. Site usa o vídeo padrão.', 'success');
+        await renderHero();
+      } catch (err) { toast(err.message || 'Não foi possível remover o vídeo.', 'error'); vRm.disabled = false; }
     });
 
     const pInput = $('#hero-poster-input');
+    const pRm = $('#hero-poster-remove');
     if (pInput) pInput.addEventListener('change', async () => {
       const f = pInput.files?.[0];
       if (!f) return;
+      pInput.disabled = true;
       try {
+        toast('Enviando imagem…');
         const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'image');
-        posterPath = r.path;
-        toast('Poster enviado. Salve para publicar.', 'success');
+        await admin.setHeroMedia({
+          video_path: hero?.video_path ?? null,
+          poster_path: r.path,
+          title: hero?.title ?? null,
+          subtitle: hero?.subtitle ?? null,
+          cta_label: hero?.cta_label ?? null,
+          cta_href: hero?.cta_href ?? null,
+          active: hero?.active ?? true,
+        });
+        toast('Imagem de capa atualizada com sucesso.', 'success');
         await renderHero();
-      } catch (err) { toast(err.message, 'error'); }
+      } catch (err) { toast(err.message || 'Não foi possível enviar a imagem.', 'error'); pInput.disabled = false; }
     });
-    const pRm = $('#hero-poster-remove');
     if (pRm) pRm.addEventListener('click', async () => {
-      if (!posterPath) return;
-      try { await deleteMedia(HERO_BUCKET, posterPath); posterPath = null; toast('Poster removido.', 'success'); await renderHero(); }
-      catch (err) { toast(err.message, 'error'); }
+      pRm.disabled = true;
+      try {
+        await deleteMedia(HERO_BUCKET, hero.poster_path);
+        await admin.setHeroMedia({
+          video_path: hero?.video_path ?? null,
+          poster_path: null,
+          title: hero?.title ?? null,
+          subtitle: hero?.subtitle ?? null,
+          cta_label: hero?.cta_label ?? null,
+          cta_href: hero?.cta_href ?? null,
+          active: hero?.active ?? true,
+        });
+        toast('Imagem de capa removida. Site usa a imagem padrão.', 'success');
+        await renderHero();
+      } catch (err) { toast(err.message || 'Não foi possível remover a imagem.', 'error'); pRm.disabled = false; }
     });
 
     $('#hero-form').addEventListener('submit', async (e) => {
@@ -771,8 +839,8 @@ async function renderHero() {
       const fd = new FormData(e.target);
       try {
         await admin.setHeroMedia({
-          video_path: videoPath,
-          poster_path: posterPath,
+          video_path: hero?.video_path ?? null,
+          poster_path: hero?.poster_path ?? null,
           title: (fd.get('title') || '').toString().trim() || null,
           subtitle: (fd.get('subtitle') || '').toString().trim() || null,
           cta_label: (fd.get('cta_label') || '').toString().trim() || null,
@@ -781,7 +849,7 @@ async function renderHero() {
         });
         toast('Hero publicado.', 'success');
         router();
-      } catch (err) { toast(err.message, 'error'); }
+      } catch (err) { toast(err.message || 'Não foi possível publicar o Hero.', 'error'); }
     });
   } catch (err) {
     root().innerHTML = shell('hero', `<div class="empty">Erro: ${esc(err.message)}</div>`);

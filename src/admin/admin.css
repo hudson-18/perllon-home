@@ -109,6 +109,41 @@ body {
 .btn-lg { padding: 11px 20px; font-size: 15px; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 
+/* Media picker (dynamic media CMS: spotlight image, hero video/poster) */
+.media-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.media-picker img,
+.media-picker video {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #000;
+}
+.media-empty {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 14px;
+  text-align: center;
+  border-radius: 8px;
+  background: rgba(0,0,0,.03);
+}
+.media-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
