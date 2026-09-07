@@ -678,9 +678,14 @@ async function initHero() {
   }
   if (!hero || !hero.active) return;     // inactive → fallback static
 
-  // Video
+  // Video — set src directly and force reload. Merely swapping a <source>
+  // child's src attribute does NOT trigger a reload in browsers, so the
+  // player would keep the old (static) media. Call load() to actually swap.
   const videoUrl = hero.videoPath ? mediaPublicUrl(HERO_BUCKET, hero.videoPath) : null;
-  if (videoUrl) root.querySelector('source')?.setAttribute('src', videoUrl);
+  if (videoUrl) {
+    root.src = videoUrl;
+    root.load();
+  }
 
   // Poster / fallback image
   const posterUrl = hero.posterPath ? mediaPublicUrl(HERO_BUCKET, hero.posterPath) : null;
