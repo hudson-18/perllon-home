@@ -143,15 +143,22 @@ async function doLogout() {
 }
 
 // Mobile drawer: open/close, overlay, ESC, close-on-route.
+// Module-level guard to prevent duplicate delegation listeners across re-renders.
+let mobileDrawerClickHandlerInstalled = false;
+
 function bindMobileDrawer() {
-  const btn = $('#mobile-menu-btn');
-  const closeBtn = $('#mobile-close-btn');
-  const overlay = $('#drawer-overlay');
-  const drawer = $('#mobile-drawer');
-  const nav = $('#mobile-drawer-nav');
-  if (!btn || !drawer) return;
+  // Remove previously installed delegation listener if any.
+  if (mobileDrawerClickHandlerInstalled) {
+    document.removeEventListener('click', handleMobileMenuClick);
+    mobileDrawerClickHandlerInstalled = false;
+  }
 
   const setOpen = (open) => {
+    const drawer = $('#mobile-drawer');
+    const btn = $('#mobile-menu-btn');
+    const overlay = $('#drawer-overlay');
+    const nav = $('#mobile-drawer-nav');
+    if (!drawer || !btn) return;
     drawer.classList.toggle('is-open', open);
     drawer.setAttribute('aria-hidden', String(!open));
     btn.setAttribute('aria-expanded', String(open));
@@ -161,9 +168,25 @@ function bindMobileDrawer() {
   };
   const close = () => setOpen(false);
 
-  btn.addEventListener('click', () => setOpen(!drawer.classList.contains('is-open')));
-  closeBtn?.addEventListener('click', close);
-  overlay?.addEventListener('click', close);
+  // Event delegation on document: robust against button re-creation
+  // via shell(). listens for clicks on #mobile-menu-btn anywhere in the DOM.
+  const handleMobileMenuClick = (e) => {
+    const btn = e.target.closest('#mobile-menu-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    setOpen(!$('#mobile-drawer')?.classList.contains('is-open'));
+  };
+  document.addEventListener('click', handleMobileMenuClick);
+  mobileDrawerClickHandlerInstalled = true;
+
+  closeBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    close();
+  });
+  overlay?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    close();
+  });
 
   // Close when a nav route is selected.
   nav?.addEventListener('click', (e) => {
@@ -171,7 +194,7 @@ function bindMobileDrawer() {
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && drawer.classList.contains('is-open')) close();
+    if (e.key === 'Escape' && $('#mobile-drawer')?.classList.contains('is-open')) close();
   });
 }
 
