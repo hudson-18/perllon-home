@@ -84,34 +84,95 @@ async function router() {
 // ---------- Shell ----------
 function shell(active, content) {
   const roleName = currentProfile?.role?.name || '';
+  const userLabel = esc(currentProfile?.full_name || currentProfile?.id || '');
+  const navLinks = `
+    <a href="#/dashboard" class="${active === 'dashboard' ? 'active' : ''}">Dashboard</a>
+    <a href="#/products" class="${active === 'products' ? 'active' : ''}">Produtos</a>
+    <a href="#/products/new" class="${active === 'product-new' ? 'active' : ''}">Novo produto</a>
+    <a href="#/spotlight" class="${active === 'spotlight' ? 'active' : ''}">Destaque</a>
+    <a href="#/hero" class="${active === 'hero' ? 'active' : ''}">Hero</a>`;
+
   return `
     <div class="admin-shell">
       <aside class="sidebar">
         <img class="sidebar-logo" src="${logoPerllonUrl}" alt="PERLLON">
-        <nav>
-          <a href="#/dashboard" class="${active === 'dashboard' ? 'active' : ''}">Dashboard</a>
-          <a href="#/products" class="${active === 'products' ? 'active' : ''}">Produtos</a>
-          <a href="#/products/new" class="${active === 'product-new' ? 'active' : ''}">Novo produto</a>
-          <a href="#/spotlight" class="${active === 'spotlight' ? 'active' : ''}">Destaque</a>
-          <a href="#/hero" class="${active === 'hero' ? 'active' : ''}">Hero</a>
-        </nav>
+        <nav>${navLinks}</nav>
         <div class="sidebar-footer">
-          <div class="user">${esc(currentProfile?.full_name || currentProfile?.id || '')}</div>
+          <div class="user">${userLabel}</div>
           <div class="role">${esc(roleName)}</div>
           <button class="btn btn-sm" id="logout-btn">Sair</button>
         </div>
       </aside>
+
+      <header class="mobile-header">
+        <img class="mobile-header-logo" src="${logoPerllonUrl}" alt="PERLLON">
+        <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="mobile-drawer">
+          <span class="mobile-menu-icon"></span>
+        </button>
+      </header>
+
+      <div class="drawer-overlay" id="drawer-overlay" hidden></div>
+      <aside class="mobile-drawer" id="mobile-drawer" aria-hidden="true">
+        <div class="mobile-drawer-head">
+          <img class="mobile-drawer-logo" src="${logoPerllonUrl}" alt="PERLLON">
+          <button class="mobile-close-btn" id="mobile-close-btn" aria-label="Fechar menu">×</button>
+        </div>
+        <nav id="mobile-drawer-nav">${navLinks}</nav>
+        <div class="mobile-drawer-footer">
+          <div class="user">${userLabel}</div>
+          <div class="role">${esc(roleName)}</div>
+          <button class="btn btn-sm" id="logout-btn-mobile">Sair</button>
+        </div>
+      </aside>
+
       <main class="main">${content}</main>
     </div>`;
 
-  // rebind logout after render
+  // rebind logout + mobile drawer after render
   setTimeout(() => {
-    $('#logout-btn')?.addEventListener('click', async () => {
-      await admin.signOut();
-      currentProfile = null;
-      location.hash = '#/login';
-    });
+    $('#logout-btn')?.addEventListener('click', doLogout);
+    $('#logout-btn-mobile')?.addEventListener('click', doLogout);
+    bindMobileDrawer();
   }, 0);
+}
+
+async function doLogout() {
+  await admin.signOut();
+  currentProfile = null;
+  location.hash = '#/login';
+}
+
+// Mobile drawer: open/close, overlay, ESC, close-on-route.
+function bindMobileDrawer() {
+  const btn = $('#mobile-menu-btn');
+  const closeBtn = $('#mobile-close-btn');
+  const overlay = $('#drawer-overlay');
+  const drawer = $('#mobile-drawer');
+  const nav = $('#mobile-drawer-nav');
+  if (!btn || !drawer) return;
+
+  const setOpen = (open) => {
+    drawer.classList.toggle('is-open', open);
+    drawer.setAttribute('aria-hidden', String(!open));
+    btn.setAttribute('aria-expanded', String(open));
+    btn.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
+    if (overlay) overlay.hidden = !open;
+    document.body.classList.toggle('drawer-open', open);
+  };
+  const close = () => setOpen(false);
+
+  btn.addEventListener('click', () => setOpen(!drawer.classList.contains('is-open')));
+  closeBtn?.addEventListener('click', close);
+  overlay?.addEventListener('click', close);
+
+  // Close when a nav route is selected.
+  nav?.addEventListener('click', (e) => {
+    if (e.target.closest('a')) close();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drawer.classList.contains('is-open')) close();
+  });
 }
 
 // ---------- Login ----------
