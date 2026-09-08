@@ -129,11 +129,12 @@ function shell(active, content) {
     </div>`;
 
   // rebind logout + mobile drawer after render
-  setTimeout(() => {
-    $('#logout-btn')?.addEventListener('click', doLogout);
-    $('#logout-btn-mobile')?.addEventListener('click', doLogout);
-    bindMobileDrawer();
-  }, 0);
+    setTimeout(() => {
+      $('#logout-btn')?.addEventListener('click', doLogout);
+      $('#logout-btn-mobile')?.addEventListener('click', doLogout);
+      bindMobileDrawer();
+      console.log('[mobile-menu] shell rendered');
+    }, 0);
 }
 
 async function doLogout() {
@@ -147,6 +148,7 @@ async function doLogout() {
 let mobileDrawerClickHandlerInstalled = false;
 
 function bindMobileDrawer() {
+  console.log('[mobile-menu] bindMobileDrawer called');
   // Remove previously installed delegation listener if any.
   if (mobileDrawerClickHandlerInstalled) {
     document.removeEventListener('click', handleMobileMenuClick);
@@ -174,8 +176,10 @@ function bindMobileDrawer() {
     const btn = e.target.closest('#mobile-menu-btn');
     if (!btn) return;
     e.stopPropagation();
+    console.log('[mobile-menu] click handler fired, open=', !$('#mobile-drawer')?.classList.contains('is-open'));
     setOpen(!$('#mobile-drawer')?.classList.contains('is-open'));
   };
+  console.log('[mobile-menu] document listener installing');
   document.addEventListener('click', handleMobileMenuClick);
   mobileDrawerClickHandlerInstalled = true;
 
