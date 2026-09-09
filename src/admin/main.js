@@ -104,36 +104,32 @@ function shell(active, content) {
         </div>
       </aside>
 
-      <header class="mobile-header">
-        <img class="mobile-header-logo" src="${logoPerllonUrl}" alt="PERLLON">
-        <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="mobile-drawer">
-          <span class="mobile-menu-icon"></span>
-        </button>
-      </header>
-
-      <div class="drawer-overlay" id="drawer-overlay" hidden></div>
-      <aside class="mobile-drawer" id="mobile-drawer" aria-hidden="true">
-        <div class="mobile-drawer-head">
-          <img class="mobile-drawer-logo" src="${logoPerllonUrl}" alt="PERLLON">
-          <button class="mobile-close-btn" id="mobile-close-btn" aria-label="Fechar menu">×</button>
+      <details id="mobile-nav-details" class="mobile-nav">
+        <summary class="mobile-nav-summary">
+          <img class="mobile-nav-logo" src="${logoPerllonUrl}" alt="PERLLON">
+          <span class="mobile-nav-icon" aria-hidden="true">
+            <span class="bar"></span>
+            <span class="bar"></span>
+            <span class="bar"></span>
+          </span>
+        </summary>
+        <div class="mobile-nav-dropdown">
+          <nav class="mobile-nav-content">${navLinks}</nav>
+          <div class="mobile-nav-account">
+            <div class="user">${userLabel}</div>
+            <div class="role">${esc(roleName)}</div>
+            <button class="btn btn-sm" id="logout-btn-mobile">Sair</button>
+          </div>
         </div>
-        <nav id="mobile-drawer-nav">${navLinks}</nav>
-        <div class="mobile-drawer-footer">
-          <div class="user">${userLabel}</div>
-          <div class="role">${esc(roleName)}</div>
-          <button class="btn btn-sm" id="logout-btn-mobile">Sair</button>
-        </div>
-      </aside>
+      </details>
 
       <main class="main">${content}</main>
     </div>`;
 
-  // rebind logout + mobile drawer after render
+  // rebind logout after render
     setTimeout(() => {
       $('#logout-btn')?.addEventListener('click', doLogout);
       $('#logout-btn-mobile')?.addEventListener('click', doLogout);
-      bindMobileDrawer();
-      console.log('[mobile-menu] shell rendered');
     }, 0);
 }
 
@@ -143,64 +139,7 @@ async function doLogout() {
   location.hash = '#/login';
 }
 
-// Mobile drawer: open/close, overlay, ESC, close-on-route.
-// Module-level guard to prevent duplicate delegation listeners across re-renders.
-let mobileDrawerClickHandlerInstalled = false;
 
-function bindMobileDrawer() {
-  console.log('[mobile-menu] bindMobileDrawer called');
-  // Remove previously installed delegation listener if any.
-  if (mobileDrawerClickHandlerInstalled) {
-    document.removeEventListener('click', handleMobileMenuClick);
-    mobileDrawerClickHandlerInstalled = false;
-  }
-
-  const setOpen = (open) => {
-    const drawer = $('#mobile-drawer');
-    const btn = $('#mobile-menu-btn');
-    const overlay = $('#drawer-overlay');
-    const nav = $('#mobile-drawer-nav');
-    if (!drawer || !btn) return;
-    drawer.classList.toggle('is-open', open);
-    drawer.setAttribute('aria-hidden', String(!open));
-    btn.setAttribute('aria-expanded', String(open));
-    btn.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
-    if (overlay) overlay.hidden = !open;
-    document.body.classList.toggle('drawer-open', open);
-  };
-  const close = () => setOpen(false);
-
-  // Event delegation on document: robust against button re-creation
-  // via shell(). listens for clicks on #mobile-menu-btn anywhere in the DOM.
-  const handleMobileMenuClick = (e) => {
-    const btn = e.target.closest('#mobile-menu-btn');
-    if (!btn) return;
-    e.stopPropagation();
-    console.log('[mobile-menu] click handler fired, open=', !$('#mobile-drawer')?.classList.contains('is-open'));
-    setOpen(!$('#mobile-drawer')?.classList.contains('is-open'));
-  };
-  console.log('[mobile-menu] document listener installing');
-  document.addEventListener('click', handleMobileMenuClick);
-  mobileDrawerClickHandlerInstalled = true;
-
-  closeBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    close();
-  });
-  overlay?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    close();
-  });
-
-  // Close when a nav route is selected.
-  nav?.addEventListener('click', (e) => {
-    if (e.target.closest('a')) close();
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && $('#mobile-drawer')?.classList.contains('is-open')) close();
-  });
-}
 
 // ---------- Login ----------
 function renderLogin() {
