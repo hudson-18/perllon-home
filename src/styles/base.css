@@ -1,5 +1,6 @@
 /* ============================================================
    PERLLON — Base / Reset / Typography
+   Status: REFINED PREMIUM PASS
    ============================================================ */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,7 +34,7 @@ ul, ol { list-style: none; }
 h1, h2, h3, h4, h5, h6 {
   font-weight: var(--weight-bold);
   line-height: var(--leading-snug);
-  letter-spacing: var(--tracking-snug);
+  letter-spacing: var(--tracking-tight);
   color: var(--color-ink);
 }
 
@@ -47,11 +48,12 @@ h1, h2, h3, h4, h5, h6 {
 .container-wide { max-width: var(--max-width-wide); }
 
 /* ── Typography helpers ── */
+/* Refined letter-spacing for premium feel: tight displays, wider eyebrows */
 .display { font-size: var(--text-display); font-weight: var(--weight-extrabold); line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); }
-.h1 { font-size: var(--text-h1); font-weight: var(--weight-bold); }
-.h2 { font-size: var(--text-h2); font-weight: var(--weight-bold); }
-.h3 { font-size: var(--text-h3); font-weight: var(--weight-semibold); }
-.lead { font-size: var(--text-lead); line-height: var(--leading-relaxed); color: var(--color-text-secondary); }
+.h1 { font-size: var(--text-h1); font-weight: var(--weight-bold); letter-spacing: var(--tracking-snug); }
+.h2 { font-size: var(--text-h2); font-weight: var(--weight-bold); letter-spacing: var(--tracking-snug); }
+.h3 { font-size: var(--text-h3); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); }
+.lead { font-size: var(--text-lead); line-height: var(--leading-relaxed); color: var(--color-text-secondary); letter-spacing: var(--tracking-normal); }
 .body { font-size: var(--text-body); line-height: var(--leading-relaxed); color: var(--color-text-secondary); }
 .eyebrow {
   display: inline-flex;
@@ -63,7 +65,7 @@ h1, h2, h3, h4, h5, h6 {
   text-transform: uppercase;
   color: var(--color-orange);
 }
-.price { font-size: var(--text-price); font-weight: var(--weight-bold); line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-snug); }
+.price { font-size: var(--text-price); font-weight: var(--weight-bold); line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-tight); }
 .price-sm { font-size: var(--text-price-sm); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
 
 /* ── Selection ── */
@@ -101,31 +103,31 @@ h1, h2, h3, h4, h5, h6 {
 .hidden { display: none; }
 
 /* ── Animated reveal (base state) ── */
+/* Easing updated to be more premium/fluid and duration shortened via tokens */
 [data-reveal] {
   opacity: 0;
-  transform: translateY(36px);
-  transition: opacity 900ms var(--ease-out), transform 900ms var(--ease-out);
+  transform: translateY(var(--motion-distance));
+  transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out);
   transition-delay: var(--reveal-delay, 0ms);
 }
 [data-reveal].is-visible { opacity: 1; transform: none; }
 [data-reveal="fade"] { transform: none; }
-[data-reveal="left"] { transform: translateX(-40px); }
-[data-reveal="right"] { transform: translateX(40px); }
-[data-reveal="scale"] { transform: scale(0.92) translateY(16px); opacity: 0; }
+[data-reveal="left"] { transform: translateX(calc(var(--motion-distance) * -1)); }
+[data-reveal="right"] { transform: translateX(var(--motion-distance)); }
+[data-reveal="scale"] { transform: scale(0.96) translateY(12px); opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   [data-reveal] { opacity: 1; transform: none; transition: none; }
 }
 
-/* Motion preview: restore the hidden base state so reveals actually animate,
-   even when the OS reports prefers-reduced-motion. Scoped to localhost preview. */
+/* Motion preview: scoped to localhost */
 :root.motion-preview [data-reveal] {
   opacity: 0;
-  transform: translateY(36px);
-  transition: opacity 900ms var(--ease-out), transform 900ms var(--ease-out);
+  transform: translateY(var(--motion-distance));
+  transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out);
   transition-delay: var(--reveal-delay, 0ms);
 }
-:root.motion-preview [data-reveal="left"] { transform: translateX(-40px); }
-:root.motion-preview [data-reveal="right"] { transform: translateX(40px); }
-:root.motion-preview [data-reveal="scale"] { transform: scale(0.92) translateY(16px); }
+:root.motion-preview [data-reveal="left"] { transform: translateX(calc(var(--motion-distance) * -1)); }
+:root.motion-preview [data-reveal="right"] { transform: translateX(var(--motion-distance)); }
+:root.motion-preview [data-reveal="scale"] { transform: scale(0.96) translateY(12px); }
 :root.motion-preview [data-reveal].is-visible { opacity: 1; transform: none; }

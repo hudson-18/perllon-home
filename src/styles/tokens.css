@@ -1,41 +1,44 @@
 /* ============================================================
-   PERLLON — Design Tokens (INTERIM)
-   Status: INTERIM — aguardando brand guide oficial
-   Nota acessibilidade: texto em botões laranja usa NAVY escuro
-   (contraste 5.28:1) pois branco sobre #FF8500 falha WCAG AA.
+   PERLLON — Design Tokens
+   Status: REFINED PREMIUM PASS
    ============================================================ */
 
 :root {
-  /* === BRAND CORE — INTERIM VALUES === */
+  /* === BRAND CORE === */
+  /* Navy: Refined to feel more like high-end electronics, deeper blacks */
   --color-navy: #064A6B;
-  --color-navy-dark: #043550;      /* footer, superfícies de alto contraste */
-  --color-navy-deep: #022C43;      /* preto-azulado profundo p/ hero dark */
+  --color-navy-dark: #032B40;      /* Darker, richer for deep backgrounds */
+  --color-navy-deep: #011826;      /* Near-black with a hint of navy for maximum contrast */
   --color-navy-light: #0A6A9A;
-  --color-navy-tint: #EAF2F7;      /* tint claro p/ superfícies azuladas */
+  --color-navy-tint: #F2F6F9;      /* Cooler, sophisticated tint */
 
-  --color-orange: #FF8500;         /* accent / CTA — branco NÃO é acessível */
-  --color-orange-dark: #E07600;    /* hover de accent */
+  /* Orange: Maintained for identity, slightly calibrated for digital displays */
+  --color-orange: #FF8500;         
+  --color-orange-dark: #E67800;    
   --color-orange-light: #FF9B2E;
-  --color-orange-tint: #FFF1E5;    /* tint laranja p/ fundo sutil */
+  --color-orange-tint: #FFF4EA;    
 
-  /* Texto sobre laranja (acessível) */
-  --color-on-orange: #1A1D2B;      /* 6.86:1 sobre #FF8500 */
-  --color-on-orange-strong: #043550; /* 5.28:1 — navy sobre laranja */
+  /* Text over orange (WCAG AA compliant) */
+  --color-on-orange: #011826;      
+  --color-on-orange-strong: #010D14; 
 
   /* === NEUTRALS & SURFACES === */
+  /* Apple-esque canvas: slight cool grey instead of harsh white or generic gray */
   --color-white: #FFFFFF;
-  --color-bg: #F7F8FA;
-  --color-bg-warm: #FAFAF8;
+  --color-bg: #F5F5F7;             /* Classic premium canvas */
+  --color-bg-warm: #FCFCFC;
   --color-surface: #FFFFFF;
-  --color-ink: #0F172A;            /* texto principal — mais profundo */
-  --color-text: #1A1D2B;
-  --color-text-secondary: #5F6577;
-  --color-text-muted: #8A93A6;
+  
+  --color-ink: #1D1D1F;            /* Premium dark grey, softer than pure #000 */
+  --color-text: #424245;           /* Secondary text, highly legible */
+  --color-text-secondary: #6E6E73;
+  --color-text-muted: #86868B;
 
-  --color-border: rgba(15, 23, 42, 0.08);
-  --color-border-hover: rgba(15, 23, 42, 0.16);
-  --color-border-strong: rgba(6, 74, 107, 0.24);
-  --color-overlay: rgba(4, 20, 33, 0.55);
+  /* Borders: significantly softer, almost invisible unless contrasting surfaces */
+  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border-hover: rgba(0, 0, 0, 0.12);
+  --color-border-strong: rgba(6, 74, 107, 0.15);
+  --color-overlay: rgba(1, 24, 38, 0.5);
 
   /* === FUNCTIONAL === */
   --color-whatsapp: #25D366;
@@ -43,21 +46,22 @@
   --color-success: #0FA968;
   --color-danger: #E0453A;
 
-  /* === TYPOGRAPHY — INTERIM (Inter) === */
+  /* === TYPOGRAPHY === */
+  /* Inter maintained but applied with refined scale and tracking */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-  /* Escala display mais generosa para percepção premium */
-  --text-display: clamp(2.75rem, 7vw, 4.75rem);   /* hero */
-  --text-h1: clamp(2rem, 5vw, 3.5rem);
-  --text-h2: clamp(1.75rem, 4vw, 2.75rem);
-  --text-h3: clamp(1.25rem, 2.5vw, 1.6rem);
-  --text-lead: clamp(1.05rem, 2vw, 1.25rem);
+  /* Tighter display sizes for a solid, crafted feel */
+  --text-display: clamp(2.5rem, 6vw, 4.2rem);   
+  --text-h1: clamp(1.8rem, 4.5vw, 3.2rem);
+  --text-h2: clamp(1.5rem, 3.5vw, 2.4rem);
+  --text-h3: clamp(1.15rem, 2vw, 1.4rem);
+  --text-lead: clamp(1.05rem, 1.5vw, 1.15rem);
   --text-body: 1rem;
-  --text-body-sm: 0.9rem;
-  --text-eyebrow: 0.78rem;
-  --text-price: clamp(1.75rem, 4vw, 2.75rem);
-  --text-price-sm: clamp(1.1rem, 2vw, 1.35rem);
-  --text-cta: 0.85rem;
+  --text-body-sm: 0.88rem;
+  --text-eyebrow: 0.75rem;
+  --text-price: clamp(1.5rem, 3.5vw, 2.2rem);
+  --text-price-sm: clamp(1.05rem, 1.5vw, 1.15rem);
+  --text-cta: 0.9rem;
 
   --weight-regular: 400;
   --weight-medium: 500;
@@ -65,15 +69,17 @@
   --weight-bold: 700;
   --weight-extrabold: 800;
 
+  /* Tighter line-heights for headings to look more cohesive */
   --leading-tight: 1.05;
-  --leading-snug: 1.2;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.65;
+  --leading-snug: 1.15;
+  --leading-normal: 1.4;
+  --leading-relaxed: 1.6;
 
-  --tracking-tight: -0.035em;
+  --tracking-tight: -0.04em;
   --tracking-snug: -0.02em;
-  --tracking-wide: 0.04em;
-  --tracking-wider: 0.12em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.02em;
+  --tracking-wider: 0.08em;
 
   /* === SPACING (8px base) === */
   --space-1: 0.25rem;
@@ -83,6 +89,7 @@
   --space-5: 1.25rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
+  --space-9: 2.25rem;
   --space-10: 2.5rem;
   --space-12: 3rem;
   --space-16: 4rem;
@@ -92,39 +99,44 @@
   --space-40: 10rem;
 
   /* === LAYOUT === */
-  --max-width: 1280px;
-  --max-width-wide: 1440px;
-  --gutter: clamp(1.25rem, 4vw, 3rem);
-  --header-height: 68px;
+  --max-width: 1200px;
+  --max-width-wide: 1400px;
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --header-height: 64px;
 
   /* === RADIUS === */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 26px;
-  --radius-2xl: 34px;
+  /* Elegant, continuous-looking curves (squircle approximation) */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
   --radius-full: 9999px;
 
-  /* === SHADOWS (mais suaves e difusas) === */
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
-  --shadow-lg: 0 16px 48px rgba(15, 23, 42, 0.12);
-  --shadow-xl: 0 32px 80px rgba(15, 23, 42, 0.16);
-  --shadow-product: 0 40px 90px -20px rgba(4, 53, 80, 0.45);
+  /* === SHADOWS === */
+  /* Multi-layered, soft, natural shadows mimicking physical diffuse light */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-product: 0 32px 64px -16px rgba(1, 24, 38, 0.25), 0 16px 32px -8px rgba(1, 24, 38, 0.15);
 
   /* === MOTION === */
-  --dur-micro: 120ms;                       /* microinteractions */
-  --dur-fast: 180ms;
-  --dur-base: 300ms;
-  --dur-smooth: 500ms;
-  --dur-slow: 800ms;
-  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Snappier, frictionless perception */
+  --dur-micro: 100ms;
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-smooth: 400ms;
+  --dur-slow: 600ms;
+  
+  /* Sophisticated easings */
+  --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.1, 1); /* highly perceptible fluid deceleration */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);   /* cinematic, long tail */
-  --motion-distance: 36px;                  /* default reveal travel */
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-distance: 24px;
 
   /* === Z-INDEX === */
   --z-dropdown: 100;
@@ -145,13 +157,10 @@
   }
 }
 
-/* Developer-only motion preview (`.motion-preview` is added by JS only on
-   localhost with ?motion=preview). Restores full motion durations regardless
-   of the OS `prefers-reduced-motion` value — scoped so production is untouched. */
 :root.motion-preview {
-  --dur-micro: 120ms;
-  --dur-fast: 180ms;
-  --dur-base: 300ms;
-  --dur-smooth: 500ms;
-  --dur-slow: 800ms;
+  --dur-micro: 100ms;
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-smooth: 400ms;
+  --dur-slow: 600ms;
 }
