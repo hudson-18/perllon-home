@@ -92,6 +92,13 @@ function shell(active, content) {
     <a href="#/spotlight" class="${active === 'spotlight' ? 'active' : ''}">Destaque</a>
     <a href="#/hero" class="${active === 'hero' ? 'active' : ''}">Hero</a>`;
 
+  // shell() is evaluated before its HTML is assigned to #admin-root. A macrotask
+  // binds both controls after the caller has inserted the returned markup.
+  setTimeout(() => {
+    $('#logout-btn')?.addEventListener('click', doLogout);
+    $('#logout-btn-mobile')?.addEventListener('click', doLogout);
+  }, 0);
+
   return `
     <div class="admin-shell">
       <aside class="sidebar">
@@ -126,17 +133,19 @@ function shell(active, content) {
       <main class="main">${content}</main>
     </div>`;
 
-  // rebind logout after render
-    setTimeout(() => {
-      $('#logout-btn')?.addEventListener('click', doLogout);
-      $('#logout-btn-mobile')?.addEventListener('click', doLogout);
-    }, 0);
 }
 
 async function doLogout() {
-  await admin.signOut();
-  currentProfile = null;
-  location.hash = '#/login';
+  const buttons = [$('#logout-btn'), $('#logout-btn-mobile')].filter(Boolean);
+  buttons.forEach((button) => { button.disabled = true; });
+  try {
+    await admin.signOut();
+    currentProfile = null;
+    location.hash = '#/login';
+  } catch (err) {
+    buttons.forEach((button) => { button.disabled = false; });
+    toast(`Não foi possível sair: ${err.message}`, 'error');
+  }
 }
 
 
@@ -507,11 +516,18 @@ async function renderProductForm(id) {
       imagesList.querySelectorAll('[data-rmimg]').forEach((b) => b.addEventListener('click', async () => {
         try {
           await admin.removeProductImage(b.dataset.rmimg);
-          if (b.dataset.path) await deleteProductImage(b.dataset.path).catch(() => {});
-          toast('Imagem removida.', 'success');
           const idx = images.findIndex((im) => im.id === b.dataset.rmimg);
           if (idx >= 0) images.splice(idx, 1);
           renderImages();
+          if (b.dataset.path) {
+            try {
+              await deleteProductImage(b.dataset.path);
+            } catch (storageError) {
+              toast(`Registro removido, mas o arquivo não pôde ser apagado do Storage: ${storageError.message}`, 'error');
+              return;
+            }
+          }
+          toast('Imagem removida.', 'success');
         } catch (e) { toast(e.message, 'error'); }
       }));
     };
@@ -522,14 +538,25 @@ async function renderProductForm(id) {
       const file = e.target.files[0];
       if (!file) return;
       if (isNew) { toast('Salve o produto antes de enviar imagens.', 'error'); return; }
+      let uploadedPath = null;
       try {
         const isPrimary = images.length === 0;
         const { path } = await uploadProductImage(file, id);
-        await admin.addProductImage(id, { storage_path: path, alt_text: p.name || '', is_primary: isPrimary, sort_order: images.length });
-        images.push({ id: crypto.randomUUID(), storage_path: path, is_primary: isPrimary });
+        uploadedPath = path;
+        const savedImage = await admin.addProductImage(id, { storage_path: path, alt_text: p.name || '', is_primary: isPrimary, sort_order: images.length });
+        images.push(savedImage);
         toast('Imagem enviada.', 'success');
         renderImages();
-      } catch (err) { toast(err.message, 'error'); }
+      } catch (err) {
+        if (uploadedPath) {
+          try {
+            await deleteProductImage(uploadedPath);
+          } catch (cleanupError) {
+            console.error('Falha ao limpar upload sem registro no banco.', cleanupError);
+          }
+        }
+        toast(err.message, 'error');
+      }
       e.target.value = '';
     });
 

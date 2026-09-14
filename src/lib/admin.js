@@ -17,8 +17,9 @@ export async function signIn(email, password) {
 
 export async function signOut() {
   const sb = await getSupabase();
-  if (!sb) return;
-  await sb.auth.signOut();
+  if (!sb) throw new Error('Supabase não configurado.');
+  const { error } = await sb.auth.signOut();
+  if (error) throw error;
 }
 
 export async function currentUser() {
@@ -90,20 +91,25 @@ export async function upsertCategory({ id, name, sort_order }) {
 
 // ---------- audit ----------
 export async function writeAudit({ action, entity, entityId, before = null, after = null, metadata = null }) {
-  const sb = await getSupabase();
-  const { data: user } = await sb.auth.getUser();
-  const { error } = await sb.from('audit_logs').insert({
-    actor_id: user?.user?.id || null,
-    actor_email: user?.user?.email || null,
-    action,
-    entity,
-    entity_id: entityId != null ? String(entityId) : null,
-    before,
-    after,
-    metadata,
-  });
-  // Audit failure is non-fatal to the primary operation.
-  if (error) console.warn('audit log failed', error);
+  try {
+    const sb = await getSupabase();
+    const { data: user } = await sb.auth.getUser();
+    const { error } = await sb.from('audit_logs').insert({
+      actor_id: user?.user?.id || null,
+      actor_email: user?.user?.email || null,
+      action,
+      entity,
+      entity_id: entityId != null ? String(entityId) : null,
+      before,
+      after,
+      metadata,
+    });
+    if (error) console.warn('audit log failed', error);
+  } catch (error) {
+    // Audit is best-effort and must not turn a completed mutation into a
+    // reported failure that triggers compensating cleanup of persisted data.
+    console.warn('audit log failed', error);
+  }
 }
 
 // ---------- products ----------
@@ -172,14 +178,14 @@ export async function deleteProduct(id) {
 // ---------- specifications ----------
 export async function replaceSpecifications(productId, specs) {
   const sb = await getSupabase();
-  await sb.from('product_specifications').delete().eq('product_id', productId);
-  if (specs && specs.length) {
-    const rows = specs
-      .filter((s) => s && s.key && s.key.trim() && s.value && s.value.trim())
-      .map((s, i) => ({ product_id: productId, key: s.key.trim(), value: s.value.trim(), unit: s.unit || null, sort_order: s.sort_order ?? i }));
-    const { error } = await sb.from('product_specifications').insert(rows);
-    if (error) throw error;
-  }
+  const rows = (specs || [])
+    .filter((s) => s && s.key && s.key.trim() && s.value && s.value.trim())
+    .map((s, i) => ({ key: s.key.trim(), value: s.value.trim(), unit: s.unit || null, sort_order: s.sort_order ?? i }));
+  const { error } = await sb.rpc('replace_product_specifications', {
+    p_product_id: productId,
+    p_specs: rows,
+  });
+  if (error) throw error;
 }
 
 // ---------- images ----------
@@ -199,9 +205,10 @@ export async function addProductImage(productId, { storage_path, alt_text, is_pr
 
 export async function removeProductImage(id) {
   const sb = await getSupabase();
-  const { error } = await sb.from('product_images').delete().eq('id', id);
+  const { data, error } = await sb.from('product_images').delete().eq('id', id).select().single();
   if (error) throw error;
-  await writeAudit({ action: 'product.image_removed', entity: 'product_image', entityId: id });
+  await writeAudit({ action: 'product.image_removed', entity: 'product_image', entityId: id, before: data });
+  return data;
 }
 
 // ---------- spotlight ----------
