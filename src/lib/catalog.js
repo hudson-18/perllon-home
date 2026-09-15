@@ -173,8 +173,8 @@ export async function fetchHeroMedia() {
 }
 
 // ---------- Cart validation (price/product re-read from DB) ----------
-// Returns a map id -> { price_cents, status, name } so the client can
-// reject stale prices and deactivated/archived items at checkout.
+// Returns current commercial fields so the cart can persist one coherent state
+// before generating an assisted-sale message.
 export async function fetchCartValidation(ids) {
   const uniq = [...new Set(ids)];
   if (uniq.length === 0) return {};
@@ -182,7 +182,7 @@ export async function fetchCartValidation(ids) {
   if (!sb) throw new Error('Supabase not configured');
   const { data, error } = await sb
     .from('products')
-    .select('id, slug, name, price_cents, status')
+    .select('id, slug, name, price_cents, installments_count, installment_cents, status')
     .in('id', uniq);
   if (error) throw error;
   const out = {};

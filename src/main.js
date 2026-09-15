@@ -10,6 +10,13 @@ import './styles/sections.css';
 
 import { fetchProducts as fetchProductsRemote, fetchSpotlight, fetchHeroMedia, fetchCartValidation, isSupabaseConfigured } from './lib/catalog.js';
 import { mediaPublicUrl, HERO_BUCKET } from './lib/storage.js';
+import fallbackIphone17 from './assets/images/iphone-17-256gb-preto.jpg';
+import fallbackIphone16 from './assets/images/iphone-16-128gb.jpg';
+import fallbackIphone15ProMax from './assets/images/iphone-15-pro-max-256gb.jpg';
+import fallbackIphone14ProMax from './assets/images/iphone-14-pro-max-128gb.jpg';
+import fallbackIphone14Pro from './assets/images/iphone-14-pro-512gb.jpg';
+import fallbackSmartBand from './assets/images/xiaomi-smart-band-10.jpg';
+import fallbackSmartwatch from './assets/images/smartwatch-wb.jpg';
 
 // ---------- Utils ----------
 const $ = (s, c = document) => c.querySelector(s);
@@ -21,6 +28,18 @@ const waUrl = (text) =>
 
 const money = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+// Static demo data stores stable asset keys. Vite resolves these imports to the
+// hashed production URLs, so the fallback never depends on /src paths at runtime.
+const FALLBACK_PRODUCT_IMAGES = {
+  'iphone-17-256gb-preto.jpg': fallbackIphone17,
+  'iphone-16-128gb.jpg': fallbackIphone16,
+  'iphone-15-pro-max-256gb.jpg': fallbackIphone15ProMax,
+  'iphone-14-pro-max-128gb.jpg': fallbackIphone14ProMax,
+  'iphone-14-pro-512gb.jpg': fallbackIphone14Pro,
+  'xiaomi-smart-band-10.jpg': fallbackSmartBand,
+  'smartwatch-wb.jpg': fallbackSmartwatch,
+};
 
 // HTML-escape dynamic data before any innerHTML interpolation (XSS hardening).
 // Never interpolate DB/localStorage/user input into HTML without this.
@@ -88,6 +107,7 @@ const Cart = {
     this.save();
   },
   remove(id) { this.items = this.items.filter((i) => i.id !== id); this.save(); },
+  replace(items) { this.items = items; this.save(); },
   count() { return this.items.reduce((n, i) => n + i.qty, 0); },
   subtotal() { return this.items.reduce((n, i) => n + i.price * i.qty, 0); },
 };
@@ -238,6 +258,7 @@ function ensureNameModal() {
     <form class="name-modal-form" novalidate>
       <label class="input-label" for="customer-name">Seu nome</label>
       <input type="text" id="customer-name" class="input" placeholder="Digite seu nome" autocomplete="name">
+      <p class="name-modal-status" role="status" aria-live="polite"></p>
       <div class="name-modal-actions">
         <button type="button" class="btn btn-ghost" data-action="cancel">Cancelar</button>
         <button type="submit" class="btn btn-primary">Continuar</button>
@@ -255,7 +276,11 @@ function openNameModal() {
   nameModalRef.classList.add('is-open');
   document.body.style.overflow = 'hidden';
   const input = $('#customer-name');
+  const status = nameModalRef.querySelector('.name-modal-status');
+  const submit = nameModalRef.querySelector('button[type="submit"]');
   const prev = document.activeElement;
+  status.textContent = '';
+  submit.disabled = false;
   setTimeout(() => input.focus(), 60);
 
   const close = () => {
@@ -270,50 +295,115 @@ function openNameModal() {
   nameModalRef.onclick = (e) => { if (e.target === nameModalRef) close(); };
 
   // submit
-  nameModalRef.querySelector('form').onsubmit = (e) => {
+  nameModalRef.querySelector('form').onsubmit = async (e) => {
     e.preventDefault();
     const name = input.value.trim();
     if (!name) { toast('Informe seu nome para continuar.'); input.focus(); return; }
-    sendWhatsAppOrder(name);
-    close();
+    submit.disabled = true;
+    status.textContent = 'Confirmando preços e disponibilidade…';
+    try {
+      const result = await finalizeOrder(name);
+      if (result.status === 'sent' || result.status === 'empty') {
+        close();
+      } else if (result.status === 'reconciled') {
+        close();
+        openCart();
+      } else {
+        status.textContent = 'Não foi possível confirmar os dados. Verifique sua conexão e tente novamente.';
+      }
+    } catch (error) {
+      console.error('[perllon] order preparation failed.', error);
+      status.textContent = 'Não foi possível preparar a consulta. Tente novamente.';
+    } finally {
+      submit.disabled = false;
+    }
   };
 }
 
-function sendWhatsAppOrder(name) {
-  void finalizeOrder(name);
+function validatedInstallments(product) {
+  if (!product.installments_count || !product.installment_cents) return null;
+  return `${product.installments_count}x de ${money(product.installment_cents / 100)}`;
+}
+
+function reconcileCartItems(items, fresh) {
+  const reconciled = [];
+  let unavailableCount = 0;
+  let priceChangeCount = 0;
+  let detailChangeCount = 0;
+
+  items.forEach((item) => {
+    const current = fresh[item.id];
+    if (!current || current.status !== 'active') {
+      unavailableCount += 1;
+      return;
+    }
+    if (!Number.isInteger(current.price_cents) || current.price_cents < 0) {
+      throw new Error(`Preço inválido recebido para o produto ${item.id}.`);
+    }
+
+    const nextPrice = current.price_cents / 100;
+    const nextInstallments = validatedInstallments(current);
+    const nextName = current.name || item.name;
+    if (nextPrice !== item.price) priceChangeCount += 1;
+    if (nextName !== item.name || nextInstallments !== (item.installments || null)) detailChangeCount += 1;
+
+    reconciled.push({
+      ...item,
+      name: nextName,
+      price: nextPrice,
+      price_cents: current.price_cents,
+      installments: nextInstallments,
+    });
+  });
+
+  return {
+    items: reconciled,
+    unavailableCount,
+    priceChangeCount,
+    detailChangeCount,
+    changed: unavailableCount > 0 || priceChangeCount > 0 || detailChangeCount > 0,
+  };
 }
 
 // Re-validate cart against the database before generating the order.
-// Prices are NEVER trusted from localStorage — they are always re-read
-// from the backend (or, in the unconfigured prototype, unchanged).
+// Connected mode blocks on validation errors. Demo mode intentionally uses the
+// static catalog because no backend is configured.
 async function finalizeOrder(name) {
-  let items = Cart.items;
+  let items = [...Cart.items];
+
+  if (items.length === 0) {
+    toast('Seu carrinho está vazio.');
+    closeCart();
+    return { status: 'empty' };
+  }
 
   // Re-read prices/status from the source of truth when available.
   if (isSupabaseConfigured()) {
     try {
       const ids = items.map((i) => i.id);
       const fresh = await fetchCartValidation(ids);
-      // Drop items that are deactivated/removed; refresh prices from DB.
-      items = items
-        .filter((i) => fresh[i.id] && (fresh[i.id].status === 'active'))
-        .map((i) => ({
-          ...i,
-          price: fresh[i.id].price_cents / 100,        // reals
-          price_cents: fresh[i.id].price_cents,
-        }));
-      if (items.length !== Cart.items.length) {
-        toast('Alguns itens do seu carrinho não estão mais disponíveis e foram removidos.');
+      const result = reconcileCartItems(items, fresh);
+      items = result.items;
+      Cart.replace(items);
+
+      if (items.length === 0) {
+        toast('Os itens do seu carrinho não estão mais disponíveis.');
+        closeCart();
+        return { status: 'empty' };
+      }
+
+      if (result.changed) {
+        const changes = [];
+        if (result.unavailableCount) changes.push('itens indisponíveis foram removidos');
+        if (result.priceChangeCount) changes.push('os valores foram atualizados');
+        if (result.detailChangeCount) changes.push('os dados dos produtos foram atualizados');
+        toast(`${changes.join(' e ')}. Revise o carrinho e confirme novamente para continuar.`);
+        return { status: 'reconciled' };
       }
     } catch (e) {
-      console.warn('[perllon] cart re-validation failed; sending with cached data.', e);
+      console.warn('[perllon] cart re-validation failed; order was not generated.', e);
+      return { status: 'validation-error' };
     }
-  }
-
-  if (items.length === 0) {
-    toast('Seu carrinho está vazio.');
-    closeCart();
-    return;
   }
 
   const lines = [
@@ -337,6 +427,7 @@ async function finalizeOrder(name) {
 
   window.open(waUrl(lines.join('\n')), '_blank', 'noopener');
   closeCart();
+  return { status: 'sent' };
 }
 
 // ---------- Keyboard: ESC closes name modal too ----------
@@ -366,24 +457,27 @@ function updateCartBadge() {
 }
 
 // ---------- Catalog preview render ----------
-// Priority: Supabase (if configured) → static JSON fallback (prototype).
+async function loadFallbackProducts() {
+  const response = await fetch('/data/products.json');
+  if (!response.ok) throw new Error(`Fallback catalog request failed (${response.status}).`);
+  const data = await response.json();
+  if (!Array.isArray(data)) throw new Error('Fallback catalog response is invalid.');
+  return data.map((product) => {
+    const image = FALLBACK_PRODUCT_IMAGES[product.image];
+    if (!image) throw new Error(`Fallback image is not mapped: ${product.image}`);
+    return { ...product, image };
+  });
+}
+
+// Supabase is authoritative whenever configured. The static catalog is only
+// used by the explicit unconfigured/demo mode.
 async function loadProducts() {
-  // 1) Try the live backend first.
   if (isSupabaseConfigured()) {
-    try {
-      const { data } = await fetchProductsRemote();
-      if (data && data.length) return data;
-    } catch (e) {
-      console.warn('[perllon] Supabase catalog load failed; falling back to static JSON.', e);
-    }
+    const { data } = await fetchProductsRemote();
+    if (!Array.isArray(data)) throw new Error('Supabase catalog response is invalid.');
+    return data;
   }
-  // 2) Static fallback (keeps prototype fully functional without a backend).
-  try {
-    const r = await fetch('/data/products.json');
-    return await r.json();
-  } catch (e) {
-    throw e;
-  }
+  return loadFallbackProducts();
 }
 
 async function initCatalog() {
@@ -400,6 +494,11 @@ async function initCatalog() {
   // Local cache of active products for cart validation at checkout
   // (id → price_cents). Prices are always re-validated against backend.
   window.__perllonCatalog = products;
+
+  if (products.length === 0) {
+    rail.innerHTML = '<p class="catalog-message">Nenhum aparelho disponível no momento. Fale conosco pelo WhatsApp para consultar reposições.</p>';
+    return;
+  }
 
   rail.innerHTML = products.map((p, idx) => {
     const name = esc(p.name);

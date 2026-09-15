@@ -12,7 +12,7 @@
     "simType": "Gaveta física de SIM",
     "features": ["Gaveta de chip", "1 ano de garantia Apple"],
     "highlight": true,
-    "image": "/src/assets/images/iphone-17-256gb-preto.jpg"
+    "image": "iphone-17-256gb-preto.jpg"
   },
   {
     "id": "iphone-16-128gb",
@@ -26,7 +26,7 @@
     "warranty": "Até 10/11",
     "features": [],
     "highlight": false,
-    "image": "/src/assets/images/iphone-16-128gb.jpg"
+    "image": "iphone-16-128gb.jpg"
   },
   {
     "id": "iphone-15-pro-max-256gb",
@@ -40,7 +40,7 @@
     "warranty": null,
     "features": [],
     "highlight": false,
-    "image": "/src/assets/images/iphone-15-pro-max-256gb.jpg"
+    "image": "iphone-15-pro-max-256gb.jpg"
   },
   {
     "id": "iphone-14-pro-max-128gb",
@@ -54,7 +54,7 @@
     "warranty": null,
     "features": [],
     "highlight": false,
-    "image": "/src/assets/images/iphone-14-pro-max-128gb.jpg"
+    "image": "iphone-14-pro-max-128gb.jpg"
   },
   {
     "id": "iphone-14-pro-512gb",
@@ -68,7 +68,7 @@
     "warranty": null,
     "features": ["Bateria 100%"],
     "highlight": false,
-    "image": "/src/assets/images/iphone-14-pro-512gb.jpg"
+    "image": "iphone-14-pro-512gb.jpg"
   },
   {
     "id": "xiaomi-smart-band-10-pro",
@@ -82,7 +82,7 @@
     "warranty": null,
     "features": [],
     "highlight": false,
-    "image": "/src/assets/images/xiaomi-smart-band-10.jpg"
+    "image": "xiaomi-smart-band-10.jpg"
   },
   {
     "id": "smartwatch-wb",
@@ -96,6 +96,6 @@
     "warranty": null,
     "features": [],
     "highlight": false,
-    "image": "/src/assets/images/smartwatch-wb.jpg"
+    "image": "smartwatch-wb.jpg"
   }
 ]

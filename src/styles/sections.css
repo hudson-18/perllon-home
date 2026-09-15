@@ -367,6 +367,16 @@
 }
 .catalog-rail::-webkit-scrollbar { display: none; }
 .catalog-rail > * { scroll-snap-align: center; }
+.catalog-message,
+.catalog-error {
+  width: min(100%, 640px);
+  padding: var(--space-6);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  line-height: var(--leading-relaxed);
+}
 
 @media (max-width: 900px) { 
   .catalog .section-head { flex-direction: column; align-items: flex-start; } 

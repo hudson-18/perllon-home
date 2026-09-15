@@ -421,3 +421,4 @@ body .name-modal-head h3 { font-weight: var(--weight-semibold); letter-spacing: 
 body .name-modal-x { background: var(--color-bg); border: 1px solid var(--color-border); transition: var(--dur-fast); }
 body .name-modal-x:hover { background: #fff; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
 body .name-modal-sub { font-size: 1rem; color: var(--color-text-secondary); }
+body .name-modal-status { min-height: 1.25rem; margin: 0; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
