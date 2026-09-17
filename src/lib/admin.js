@@ -32,13 +32,16 @@ export async function currentUser() {
 export async function currentProfile() {
   const sb = await getSupabase();
   if (!sb) return null;
-  const { data: user } = await sb.auth.getUser();
+  const { data: user, error: userError } = await sb.auth.getUser();
+  if (userError?.name === 'AuthSessionMissingError') return null;
+  if (userError) throw userError;
   if (!user?.user) return null;
-  const { data } = await sb
+  const { data, error } = await sb
     .from('profiles')
     .select('id, full_name, role:roles(slug, name)')
     .eq('id', user.user.id)
     .maybeSingle();
+  if (error) throw error;
   return data || null;
 }
 
@@ -193,7 +196,8 @@ export async function addProductImage(productId, { storage_path, alt_text, is_pr
   const sb = await getSupabase();
   if (is_primary) {
     // Clear prior primary flag on this product.
-    await sb.from('product_images').update({ is_primary: false }).eq('product_id', productId).eq('is_primary', true);
+    const { error: primaryError } = await sb.from('product_images').update({ is_primary: false }).eq('product_id', productId).eq('is_primary', true);
+    if (primaryError) throw primaryError;
   }
   const { data, error } = await sb.from('product_images')
     .insert({ product_id: productId, storage_path, alt_text, is_primary: is_primary ?? false, sort_order: sort_order ?? 0 })
@@ -276,11 +280,20 @@ export async function setHeroMedia(fields) {
 // ---------- dashboard stats ----------
 export async function dashboardStats() {
   const sb = await getSupabase();
-  const { count: total } = await sb.from('products').select('*', { count: 'exact', head: true });
-  const { count: active } = await sb.from('products').select('*', { count: 'exact', head: true }).eq('status', 'active');
-  const { count: inactive } = await sb.from('products').select('*', { count: 'exact', head: true }).eq('status', 'inactive');
-  const { count: archived } = await sb.from('products').select('*', { count: 'exact', head: true }).eq('status', 'archived');
-  return { total: total || 0, active: active || 0, inactive: inactive || 0, archived: archived || 0 };
+  const countProducts = async (status) => {
+    let query = sb.from('products').select('*', { count: 'exact', head: true });
+    if (status) query = query.eq('status', status);
+    const { count, error } = await query;
+    if (error) throw error;
+    return count ?? 0;
+  };
+  const [total, active, inactive, archived] = await Promise.all([
+    countProducts(),
+    countProducts('active'),
+    countProducts('inactive'),
+    countProducts('archived'),
+  ]);
+  return { total, active, inactive, archived };
 }
 
 export async function recentAudit(limit = 10) {

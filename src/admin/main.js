@@ -30,6 +30,38 @@ function toast(msg, type = '') {
   toastTimer = setTimeout(() => el.remove(), 3200);
 }
 
+function beginPending(control, pendingText) {
+  if (!control || control.dataset.pending === 'true') return false;
+  control.dataset.pending = 'true';
+  control.disabled = true;
+  if (pendingText) {
+    control.dataset.idleText = control.textContent;
+    control.textContent = pendingText;
+  }
+  return true;
+}
+
+function finishPending(control) {
+  if (!control) return;
+  control.disabled = false;
+  if (control.dataset.idleText !== undefined) {
+    control.textContent = control.dataset.idleText;
+    delete control.dataset.idleText;
+  }
+  delete control.dataset.pending;
+}
+
+const SAFE_ADMIN_ERROR_PREFIXES = ['Arquivo ', 'Tipo não permitido:', 'Arquivo muito grande', 'Supabase não configurado.'];
+
+function reportAdminError(error, fallback, allowSafeMessage = false) {
+  console.error(fallback, error);
+  const technicalMessage = typeof error?.message === 'string' ? error.message : '';
+  const message = allowSafeMessage && SAFE_ADMIN_ERROR_PREFIXES.some((prefix) => technicalMessage.startsWith(prefix))
+    ? technicalMessage
+    : fallback;
+  toast(message, 'error');
+}
+
 // ---------- Routing ----------
 let currentProfile = null;
 let navigationRunId = 0;
@@ -72,7 +104,19 @@ async function router() {
   }
 
   // Not authenticated → force login (for anything but login itself).
-  const profile = await admin.currentProfile().catch(() => null);
+  let profile;
+  try {
+    profile = await admin.currentProfile();
+  } catch (error) {
+    if (!isCurrentNavigation(runId)) return;
+    console.error('Não foi possível verificar a sessão administrativa.', error);
+    root().innerHTML = sessionUnavailable();
+    $('#retry-session')?.addEventListener('click', (event) => {
+      if (!beginPending(event.currentTarget, 'Tentando novamente…')) return;
+      router();
+    });
+    return;
+  }
   if (!isCurrentNavigation(runId)) return;
   currentProfile = profile;
   if (!profile && name !== 'login') {
@@ -145,14 +189,16 @@ function shell(active, content) {
 
 async function doLogout() {
   const buttons = [$('#logout-btn'), $('#logout-btn-mobile')].filter(Boolean);
-  buttons.forEach((button) => { button.disabled = true; });
+  if (!buttons.length || buttons.some((button) => button.dataset.pending === 'true')) return;
+  buttons.forEach((button) => beginPending(button, 'Saindo…'));
   try {
     await admin.signOut();
     currentProfile = null;
     location.hash = '#/login';
   } catch (err) {
-    buttons.forEach((button) => { button.disabled = false; });
-    toast(`Não foi possível sair: ${err.message}`, 'error');
+    reportAdminError(err, 'Não foi possível sair. Tente novamente.');
+  } finally {
+    buttons.forEach(finishPending);
   }
 }
 
@@ -187,13 +233,14 @@ function renderLogin() {
     const password = $('#password').value;
     if (!email || !password) { toast('Informe e-mail e senha.', 'error'); return; }
     const btn = $('#login-form button[type="submit"]');
-    btn.disabled = true; btn.textContent = 'Entrando…';
+    if (!beginPending(btn, 'Entrando…')) return;
     try {
       await admin.signIn(email, password);
       location.hash = '#/dashboard';
     } catch (err) {
-      toast(err.message || 'Falha no login.', 'error');
-      btn.disabled = false; btn.textContent = 'Entrar';
+      reportAdminError(err, 'Não foi possível entrar. Verifique seus dados e tente novamente.');
+    } finally {
+      finishPending(btn);
     }
   });
 }
@@ -220,7 +267,16 @@ async function renderDashboard(_id, runId) {
       </div>`);
   } catch (err) {
     if (!isCurrentNavigation(runId)) return;
-    root().innerHTML = shell('dashboard', `<div class="empty">Erro ao carregar: ${esc(err.message)}</div>`);
+    console.error('Não foi possível carregar o dashboard.', err);
+    root().innerHTML = shell('dashboard', `
+      <div class="empty">
+        Não foi possível carregar os dados do dashboard.
+        <div style="margin-top:12px"><button type="button" class="btn" id="retry-dashboard">Tentar novamente</button></div>
+      </div>`);
+    $('#retry-dashboard')?.addEventListener('click', (event) => {
+      if (!beginPending(event.currentTarget, 'Tentando novamente…')) return;
+      router();
+    });
   }
 }
 
@@ -320,7 +376,8 @@ async function renderProducts(_id, runId) {
     bindStatusButtons();
   } catch (err) {
     if (!isCurrentNavigation(runId)) return;
-    root().innerHTML = shell('products', `<div class="empty">Erro: ${esc(err.message)}</div>`);
+    console.error('Não foi possível carregar os produtos.', err);
+    root().innerHTML = shell('products', `<div class="empty">Não foi possível carregar os produtos. Tente novamente.</div>`);
   }
 }
 
@@ -333,13 +390,29 @@ function imageUrlOrNull(path) {
 
 function bindStatusButtons() {
   $$('[data-activate]').forEach((b) => b.addEventListener('click', async () => {
-    try { await admin.setProductStatus(b.dataset.activate, 'active'); toast('Produto ativado.', 'success'); router(); }
-    catch (e) { toast(e.message, 'error'); }
+    if (!beginPending(b, 'Ativando…')) return;
+    try {
+      await admin.setProductStatus(b.dataset.activate, 'active');
+      toast('Produto ativado.', 'success');
+      router();
+    } catch (error) {
+      reportAdminError(error, 'Não foi possível ativar o produto. Tente novamente.');
+    } finally {
+      finishPending(b);
+    }
   }));
   $$('[data-deactivate]').forEach((b) => b.addEventListener('click', async () => {
     if (!confirm('Desativar este produto? Ele deixará de aparecer no site.')) return;
-    try { await admin.setProductStatus(b.dataset.deactivate, 'inactive'); toast('Produto desativado.', 'success'); router(); }
-    catch (e) { toast(e.message, 'error'); }
+    if (!beginPending(b, 'Desativando…')) return;
+    try {
+      await admin.setProductStatus(b.dataset.deactivate, 'inactive');
+      toast('Produto desativado.', 'success');
+      router();
+    } catch (error) {
+      reportAdminError(error, 'Não foi possível desativar o produto. Tente novamente.');
+    } finally {
+      finishPending(b);
+    }
   }));
 }
 
@@ -469,6 +542,8 @@ async function renderProductForm(id, runId) {
     $('#save-brand-btn').addEventListener('click', async () => {
       const name = brandNameInput.value.trim();
       if (!name) { toast('Informe o nome da marca.', 'error'); return; }
+      const button = $('#save-brand-btn');
+      if (!beginPending(button, 'Criando…')) return;
       try {
         const created = await admin.upsertBrand({ name });
         const opt = document.createElement('option');
@@ -476,7 +551,11 @@ async function renderProductForm(id, runId) {
         brandSelect.appendChild(opt);
         brandRow.style.display = 'none'; newBrandBtn.style.display = ''; brandNameInput.value = '';
         toast('Marca criada.', 'success');
-      } catch (e) { toast(e.message, 'error'); }
+      } catch (error) {
+        reportAdminError(error, 'Não foi possível criar a marca. Verifique se ela já existe e tente novamente.');
+      } finally {
+        finishPending(button);
+      }
     });
 
     newCategoryBtn.addEventListener('click', () => { categoryRow.style.display = 'flex'; newCategoryBtn.style.display = 'none'; categoryNameInput.focus(); });
@@ -484,6 +563,8 @@ async function renderProductForm(id, runId) {
     $('#save-category-btn').addEventListener('click', async () => {
       const name = categoryNameInput.value.trim();
       if (!name) { toast('Informe o nome da categoria.', 'error'); return; }
+      const button = $('#save-category-btn');
+      if (!beginPending(button, 'Criando…')) return;
       try {
         const created = await admin.upsertCategory({ name });
         const opt = document.createElement('option');
@@ -491,7 +572,11 @@ async function renderProductForm(id, runId) {
         categorySelect.appendChild(opt);
         categoryRow.style.display = 'none'; newCategoryBtn.style.display = ''; categoryNameInput.value = '';
         toast('Categoria criada.', 'success');
-      } catch (e) { toast(e.message, 'error'); }
+      } catch (error) {
+        reportAdminError(error, 'Não foi possível criar a categoria. Verifique se ela já existe e tente novamente.');
+      } finally {
+        finishPending(button);
+      }
     });
 
     // specs editor
@@ -527,6 +612,7 @@ async function renderProductForm(id, runId) {
           </div>`).join('')
         : '<div class="empty" style="padding:16px">Nenhuma imagem.</div>';
       imagesList.querySelectorAll('[data-rmimg]').forEach((b) => b.addEventListener('click', async () => {
+        if (!beginPending(b, 'Removendo…')) return;
         try {
           await admin.removeProductImage(b.dataset.rmimg);
           const idx = images.findIndex((im) => im.id === b.dataset.rmimg);
@@ -536,27 +622,38 @@ async function renderProductForm(id, runId) {
             try {
               await deleteProductImage(b.dataset.path);
             } catch (storageError) {
-              toast(`Registro removido, mas o arquivo não pôde ser apagado do Storage: ${storageError.message}`, 'error');
+              reportAdminError(storageError, 'A imagem foi removida do produto, mas o arquivo antigo não pôde ser limpo. Tente novamente mais tarde.');
               return;
             }
           }
           toast('Imagem removida.', 'success');
-        } catch (e) { toast(e.message, 'error'); }
+        } catch (error) {
+          reportAdminError(error, 'Não foi possível remover a imagem. Tente novamente.');
+        } finally {
+          finishPending(b);
+        }
       }));
     };
     renderImages();
 
     // image upload (needs an existing product id)
     $('#image-upload').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
+      const input = e.currentTarget;
+      const file = input.files[0];
       if (!file) return;
-      if (isNew) { toast('Salve o produto antes de enviar imagens.', 'error'); return; }
+      if (isNew) {
+        toast('Salve o produto antes de enviar imagens.', 'error');
+        input.value = '';
+        return;
+      }
+      if (!beginPending(input)) return;
       let uploadedPath = null;
       try {
         const isPrimary = images.length === 0;
         const { path } = await uploadProductImage(file, id);
         uploadedPath = path;
         const savedImage = await admin.addProductImage(id, { storage_path: path, alt_text: p.name || '', is_primary: isPrimary, sort_order: images.length });
+        uploadedPath = null;
         images.push(savedImage);
         toast('Imagem enviada.', 'success');
         renderImages();
@@ -565,12 +662,16 @@ async function renderProductForm(id, runId) {
           try {
             await deleteProductImage(uploadedPath);
           } catch (cleanupError) {
+            // Cleanup is best-effort: the database write failed, so no UI or
+            // database record references this orphaned object.
             console.error('Falha ao limpar upload sem registro no banco.', cleanupError);
           }
         }
-        toast(err.message, 'error');
+        reportAdminError(err, 'Não foi possível enviar a imagem. Tente novamente.', true);
+      } finally {
+        input.value = '';
+        finishPending(input);
       }
-      e.target.value = '';
     });
 
     // submit
@@ -582,6 +683,8 @@ async function renderProductForm(id, runId) {
       const priceCents = Math.round(parseFloat(priceStr) * 100);
       if (!name) { toast('Informe o nome do produto.', 'error'); return; }
       if (!priceStr || isNaN(priceCents) || priceCents < 0) { toast('Preço inválido.', 'error'); return; }
+      const submitButton = e.currentTarget.querySelector('button[type="submit"]');
+      if (!beginPending(submitButton, 'Salvando…')) return;
 
       let slug = (fd.get('slug') || '').toString().trim();
       if (!slug) slug = name.toLowerCase().replace(/[^a-z0-9áéíóúãõç]+/g, '-').replace(/^-+|-+$/g, '');
@@ -598,8 +701,9 @@ async function renderProductForm(id, runId) {
         status: fd.get('status') || 'inactive',
       };
 
+      let savedId = id;
+      let basicDataSaved = false;
       try {
-        let savedId = id;
         if (isNew) {
           const created = await admin.createProduct(payload);
           savedId = created.id;
@@ -607,6 +711,7 @@ async function renderProductForm(id, runId) {
           await admin.updateProduct(id, payload);
           savedId = id;
         }
+        basicDataSaved = true;
         // persist specs (only for existing; new handle after create)
         if (!isNew || savedId) {
           await admin.replaceSpecifications(savedId, specs.filter((s) => s.key && s.value));
@@ -616,12 +721,20 @@ async function renderProductForm(id, runId) {
         if (location.hash === destination) router();
         else location.hash = destination;
       } catch (err) {
-        toast(err.message, 'error');
+        if (basicDataSaved) {
+          reportAdminError(err, `${isNew ? 'O produto foi criado' : 'Os dados básicos foram salvos'}, mas não foi possível salvar as especificações. Revise os dados e tente salvar novamente.`);
+          if (isNew && savedId) location.hash = `#/products/${savedId}`;
+        } else {
+          reportAdminError(err, 'Não foi possível salvar o produto. Revise os dados e tente novamente.');
+        }
+      } finally {
+        finishPending(submitButton);
       }
     });
   } catch (err) {
     if (!isCurrentNavigation(runId)) return;
-    root().innerHTML = shell('products', `<div class="empty">Erro: ${esc(err.message)}</div>`);
+    console.error('Não foi possível carregar o formulário de produto.', err);
+    root().innerHTML = shell('products', `<div class="empty">Não foi possível carregar o produto. Tente novamente.</div>`);
   }
 }
 
@@ -693,10 +806,12 @@ async function renderSpotlight(_id, runId) {
     if (imgInput) imgInput.addEventListener('change', async () => {
       const f = imgInput.files?.[0];
       if (!f) return;
-      imgInput.disabled = true;
+      if (!beginPending(imgInput)) return;
+      let uploadedPath = null;
       try {
         toast('Enviando imagem…');
         const { path } = await uploadMedia('product-images', f, 'spotlight', 'image');
+        uploadedPath = path;
         // Persist immediately so the preview + public site reflect it at once.
         await admin.setSpotlight({
           product_id: spot?.product_id || $('#spot-form [name=product_id]')?.value,
@@ -707,14 +822,27 @@ async function renderSpotlight(_id, runId) {
           cta_label: spot?.cta_label ?? null,
           image_path_override: path,
         });
+        uploadedPath = null;
         toast('Imagem do destaque atualizada com sucesso.', 'success');
         await router();
-      } catch (err) { toast(err.message || 'Não foi possível enviar a imagem.', 'error'); imgInput.disabled = false; }
+      } catch (err) {
+        if (uploadedPath) {
+          try {
+            await deleteMedia('product-images', uploadedPath);
+          } catch (cleanupError) {
+            // Best-effort cleanup; no database row points to this failed upload.
+            console.error('Falha ao limpar upload de destaque sem referência.', cleanupError);
+          }
+        }
+        reportAdminError(err, 'Não foi possível enviar a imagem do destaque. Tente novamente.', true);
+      } finally {
+        imgInput.value = '';
+        finishPending(imgInput);
+      }
     });
     if (rmBtn) rmBtn.addEventListener('click', async () => {
-      rmBtn.disabled = true;
+      if (!beginPending(rmBtn, 'Removendo…')) return;
       try {
-        await deleteMedia('product-images', spot.image_path_override);
         await admin.setSpotlight({
           product_id: spot?.product_id,
           active: spot?.active ?? true,
@@ -724,9 +852,20 @@ async function renderSpotlight(_id, runId) {
           cta_label: spot?.cta_label ?? null,
           image_path_override: null,
         });
+        try {
+          await deleteMedia('product-images', spot.image_path_override);
+        } catch (storageError) {
+          reportAdminError(storageError, 'A imagem foi desvinculada do destaque, mas o arquivo antigo não pôde ser limpo.');
+          await router();
+          return;
+        }
         toast('Imagem personalizada removida. Usando a imagem do produto.', 'success');
         await router();
-      } catch (err) { toast(err.message || 'Não foi possível remover a imagem.', 'error'); rmBtn.disabled = false; }
+      } catch (err) {
+        reportAdminError(err, 'Não foi possível remover a imagem do destaque. Tente novamente.');
+      } finally {
+        finishPending(rmBtn);
+      }
     });
 
     $('#spot-form').addEventListener('submit', async (e) => {
@@ -734,6 +873,8 @@ async function renderSpotlight(_id, runId) {
       const fd = new FormData(e.target);
       const product_id = (fd.get('product_id') || '').toString();
       if (!product_id) { toast('Selecione um produto.', 'error'); return; }
+      const submitButton = e.currentTarget.querySelector('button[type="submit"]');
+      if (!beginPending(submitButton, 'Salvando…')) return;
       try {
         await admin.setSpotlight({
           product_id,
@@ -746,11 +887,16 @@ async function renderSpotlight(_id, runId) {
         });
         toast('Destaque publicado.', 'success');
         router();
-      } catch (err) { toast(err.message || 'Não foi possível salvar o destaque.', 'error'); }
+      } catch (err) {
+        reportAdminError(err, 'Não foi possível salvar o destaque. Tente novamente.');
+      } finally {
+        finishPending(submitButton);
+      }
     });
   } catch (err) {
     if (!isCurrentNavigation(runId)) return;
-    root().innerHTML = shell('spotlight', `<div class="empty">Erro: ${esc(err.message)}</div>`);
+    console.error('Não foi possível carregar o destaque.', err);
+    root().innerHTML = shell('spotlight', `<div class="empty">Não foi possível carregar o destaque. Tente novamente.</div>`);
   }
 }
 
@@ -831,23 +977,49 @@ async function renderHero(_id, runId) {
     if (vInput) vInput.addEventListener('change', async () => {
       const f = vInput.files?.[0];
       if (!f) return;
-      vInput.disabled = true;
+      if (!beginPending(vInput)) return;
+      let uploadedPath = null;
       try {
         toast('Enviando vídeo…');
         const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'video');
+        uploadedPath = r.path;
         await admin.setHeroMedia({ video_path: r.path });
+        uploadedPath = null;
         toast('Vídeo do Hero atualizado com sucesso.', 'success');
         await router();
-      } catch (err) { toast(err.message || 'Não foi possível enviar o vídeo. Verifique o formato e tente novamente.', 'error'); vInput.disabled = false; }
+      } catch (err) {
+        if (uploadedPath) {
+          try {
+            await deleteMedia(HERO_BUCKET, uploadedPath);
+          } catch (cleanupError) {
+            // Best-effort cleanup; the failed database write left no reference.
+            console.error('Falha ao limpar vídeo sem referência.', cleanupError);
+          }
+        }
+        reportAdminError(err, 'Não foi possível enviar o vídeo. Verifique o formato e tente novamente.', true);
+      } finally {
+        vInput.value = '';
+        finishPending(vInput);
+      }
     });
     if (vRm) vRm.addEventListener('click', async () => {
-      vRm.disabled = true;
+      if (!beginPending(vRm, 'Removendo…')) return;
       try {
-        await deleteMedia(HERO_BUCKET, hero.video_path);
         await admin.setHeroMedia({ video_path: null });
+        try {
+          await deleteMedia(HERO_BUCKET, hero.video_path);
+        } catch (storageError) {
+          reportAdminError(storageError, 'O vídeo foi desvinculado do Hero, mas o arquivo antigo não pôde ser limpo.');
+          await router();
+          return;
+        }
         toast('Vídeo personalizado removido. Site usa o vídeo padrão.', 'success');
         await router();
-      } catch (err) { toast(err.message || 'Não foi possível remover o vídeo.', 'error'); vRm.disabled = false; }
+      } catch (err) {
+        reportAdminError(err, 'Não foi possível remover o vídeo. Tente novamente.');
+      } finally {
+        finishPending(vRm);
+      }
     });
 
     const pInput = $('#hero-poster-input');
@@ -855,28 +1027,56 @@ async function renderHero(_id, runId) {
     if (pInput) pInput.addEventListener('change', async () => {
       const f = pInput.files?.[0];
       if (!f) return;
-      pInput.disabled = true;
+      if (!beginPending(pInput)) return;
+      let uploadedPath = null;
       try {
         toast('Enviando imagem…');
         const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'image');
+        uploadedPath = r.path;
         await admin.setHeroMedia({ poster_path: r.path });
+        uploadedPath = null;
         toast('Imagem de capa atualizada com sucesso.', 'success');
         await router();
-      } catch (err) { toast(err.message || 'Não foi possível enviar a imagem.', 'error'); pInput.disabled = false; }
+      } catch (err) {
+        if (uploadedPath) {
+          try {
+            await deleteMedia(HERO_BUCKET, uploadedPath);
+          } catch (cleanupError) {
+            // Best-effort cleanup; the failed database write left no reference.
+            console.error('Falha ao limpar imagem de capa sem referência.', cleanupError);
+          }
+        }
+        reportAdminError(err, 'Não foi possível enviar a imagem de capa. Tente novamente.', true);
+      } finally {
+        pInput.value = '';
+        finishPending(pInput);
+      }
     });
     if (pRm) pRm.addEventListener('click', async () => {
-      pRm.disabled = true;
+      if (!beginPending(pRm, 'Removendo…')) return;
       try {
-        await deleteMedia(HERO_BUCKET, hero.poster_path);
         await admin.setHeroMedia({ poster_path: null });
+        try {
+          await deleteMedia(HERO_BUCKET, hero.poster_path);
+        } catch (storageError) {
+          reportAdminError(storageError, 'A imagem de capa foi desvinculada, mas o arquivo antigo não pôde ser limpo.');
+          await router();
+          return;
+        }
         toast('Imagem de capa removida. Site usa a imagem padrão.', 'success');
         await router();
-      } catch (err) { toast(err.message || 'Não foi possível remover a imagem.', 'error'); pRm.disabled = false; }
+      } catch (err) {
+        reportAdminError(err, 'Não foi possível remover a imagem de capa. Tente novamente.');
+      } finally {
+        finishPending(pRm);
+      }
     });
 
     $('#hero-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
+      const submitButton = e.currentTarget.querySelector('button[type="submit"]');
+      if (!beginPending(submitButton, 'Salvando…')) return;
       try {
         // Editorial + publish only — do NOT send video/poster paths, leaving
         // the uploaded media intact (upload/remove buttons already persist
@@ -890,12 +1090,29 @@ async function renderHero(_id, runId) {
         });
         toast('Hero publicado.', 'success');
         router();
-      } catch (err) { toast(err.message || 'Não foi possível publicar o Hero.', 'error'); }
+      } catch (err) {
+        reportAdminError(err, 'Não foi possível publicar o Hero. Tente novamente.');
+      } finally {
+        finishPending(submitButton);
+      }
     });
   } catch (err) {
     if (!isCurrentNavigation(runId)) return;
-    root().innerHTML = shell('hero', `<div class="empty">Erro: ${esc(err.message)}</div>`);
+    console.error('Não foi possível carregar o Hero.', err);
+    root().innerHTML = shell('hero', `<div class="empty">Não foi possível carregar o Hero. Tente novamente.</div>`);
   }
+}
+
+function sessionUnavailable() {
+  return `
+    <div class="login-wrap">
+      <div class="login-card">
+        <img class="login-logo" src="${logoPerllonUrl}" alt="PERLLON">
+        <h1>Não foi possível verificar seu acesso</h1>
+        <p class="login-sub">Confira sua conexão e tente novamente.</p>
+        <button type="button" class="btn btn-primary" id="retry-session" style="width:100%">Tentar novamente</button>
+      </div>
+    </div>`;
 }
 
 // ---------- Not configured ----------
