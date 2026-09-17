@@ -32,6 +32,11 @@ function toast(msg, type = '') {
 
 // ---------- Routing ----------
 let currentProfile = null;
+let navigationRunId = 0;
+
+function isCurrentNavigation(runId) {
+  return runId === navigationRunId;
+}
 
 const routes = {
   login: renderLogin,
@@ -57,6 +62,7 @@ function parseHash() {
 }
 
 async function router() {
+  const runId = ++navigationRunId;
   const { name, id } = parseHash();
 
   // Not configured → friendly placeholder.
@@ -66,19 +72,21 @@ async function router() {
   }
 
   // Not authenticated → force login (for anything but login itself).
-  currentProfile = await admin.currentProfile().catch(() => null);
-  if (!currentProfile && name !== 'login') {
+  const profile = await admin.currentProfile().catch(() => null);
+  if (!isCurrentNavigation(runId)) return;
+  currentProfile = profile;
+  if (!profile && name !== 'login') {
     location.hash = '#/login';
     return;
   }
-  if (currentProfile && name === 'login') {
+  if (profile && name === 'login') {
     location.hash = '#/dashboard';
     return;
   }
 
   const fn = routes[name];
   if (!fn) { location.hash = '#/dashboard'; return; }
-  await fn(id);
+  await fn(id, runId);
 }
 
 // ---------- Shell ----------
@@ -191,10 +199,11 @@ function renderLogin() {
 }
 
 // ---------- Dashboard ----------
-async function renderDashboard() {
+async function renderDashboard(_id, runId) {
   root().innerHTML = shell('dashboard', `<div class="loading">Carregando…</div>`);
   try {
     const [stats, audit] = await Promise.all([admin.dashboardStats(), admin.recentAudit(8)]);
+    if (!isCurrentNavigation(runId)) return;
     root().innerHTML = shell('dashboard', `
       <div class="main-head"><h2>Dashboard</h2>
         <a href="#/products/new" class="btn btn-orange">+ Novo produto</a>
@@ -210,6 +219,7 @@ async function renderDashboard() {
         ${audit.length ? auditTable(audit) : '<div class="empty">Nenhuma atividade registrada.</div>'}
       </div>`);
   } catch (err) {
+    if (!isCurrentNavigation(runId)) return;
     root().innerHTML = shell('dashboard', `<div class="empty">Erro ao carregar: ${esc(err.message)}</div>`);
   }
 }
@@ -226,12 +236,13 @@ function auditTable(audit) {
 }
 
 // ---------- Products list ----------
-async function renderProducts() {
+async function renderProducts(_id, runId) {
   root().innerHTML = shell('products', `<div class="loading">Carregando produtos…</div>`);
   try {
     const [products, brands, categories] = await Promise.all([
       admin.listProductsAll(), admin.listBrands(), admin.listCategories(),
     ]);
+    if (!isCurrentNavigation(runId)) return;
     const brandById = Object.fromEntries(brands.map((b) => [b.id, b.name]));
     const catById = Object.fromEntries(categories.map((c) => [c.id, c.name]));
 
@@ -308,6 +319,7 @@ async function renderProducts() {
     $('#filter-status')?.addEventListener('change', applyFilter);
     bindStatusButtons();
   } catch (err) {
+    if (!isCurrentNavigation(runId)) return;
     root().innerHTML = shell('products', `<div class="empty">Erro: ${esc(err.message)}</div>`);
   }
 }
@@ -332,7 +344,7 @@ function bindStatusButtons() {
 }
 
 // ---------- Product form (new + edit) ----------
-async function renderProductForm(id) {
+async function renderProductForm(id, runId) {
   const isNew = !id;
   root().innerHTML = shell(isNew ? 'product-new' : 'products', `<div class="loading">Carregando…</div>`);
 
@@ -340,6 +352,7 @@ async function renderProductForm(id) {
     const [brands, categories] = await Promise.all([admin.listBrands(), admin.listCategories()]);
     let product = null;
     if (!isNew) product = await admin.getProduct(id);
+    if (!isCurrentNavigation(runId)) return;
 
     const p = product || {};
     const specs = p.product_specifications || [];
@@ -599,24 +612,27 @@ async function renderProductForm(id) {
           await admin.replaceSpecifications(savedId, specs.filter((s) => s.key && s.value));
         }
         toast(isNew ? 'Produto criado.' : 'Produto salvo.', 'success');
-        location.hash = `#/products/${savedId}`;
-        router();
+        const destination = `#/products/${savedId}`;
+        if (location.hash === destination) router();
+        else location.hash = destination;
       } catch (err) {
         toast(err.message, 'error');
       }
     });
   } catch (err) {
+    if (!isCurrentNavigation(runId)) return;
     root().innerHTML = shell('products', `<div class="empty">Erro: ${esc(err.message)}</div>`);
   }
 }
 
 // ---------- Spotlight ----------
-async function renderSpotlight() {
+async function renderSpotlight(_id, runId) {
   root().innerHTML = shell('spotlight', `<div class="loading">Carregando…</div>`);
   try {
     const [products, spot, categories] = await Promise.all([
       admin.listProductsAll(), admin.getSpotlight(), admin.listCategories(),
     ]);
+    if (!isCurrentNavigation(runId)) return;
     const activeProducts = products.filter((p) => p.status === 'active');
     const catById = Object.fromEntries(categories.map((c) => [c.id, c.name]));
     const overrideUrl = spot?.image_path_override ? mediaPublicUrl('product-images', spot.image_path_override) : null;
@@ -692,7 +708,7 @@ async function renderSpotlight() {
           image_path_override: path,
         });
         toast('Imagem do destaque atualizada com sucesso.', 'success');
-        await renderSpotlight();
+        await router();
       } catch (err) { toast(err.message || 'Não foi possível enviar a imagem.', 'error'); imgInput.disabled = false; }
     });
     if (rmBtn) rmBtn.addEventListener('click', async () => {
@@ -709,7 +725,7 @@ async function renderSpotlight() {
           image_path_override: null,
         });
         toast('Imagem personalizada removida. Usando a imagem do produto.', 'success');
-        await renderSpotlight();
+        await router();
       } catch (err) { toast(err.message || 'Não foi possível remover a imagem.', 'error'); rmBtn.disabled = false; }
     });
 
@@ -733,15 +749,17 @@ async function renderSpotlight() {
       } catch (err) { toast(err.message || 'Não foi possível salvar o destaque.', 'error'); }
     });
   } catch (err) {
+    if (!isCurrentNavigation(runId)) return;
     root().innerHTML = shell('spotlight', `<div class="empty">Erro: ${esc(err.message)}</div>`);
   }
 }
 
 // ---------- Hero media management ----------
-async function renderHero() {
+async function renderHero(_id, runId) {
   root().innerHTML = shell('hero', `<div class="loading">Carregando…</div>`);
   try {
     const hero = await admin.getHeroMedia();
+    if (!isCurrentNavigation(runId)) return;
 
     const videoUrl = hero?.video_path ? mediaPublicUrl(HERO_BUCKET, hero.video_path) : null;
     const posterUrl = hero?.poster_path ? mediaPublicUrl(HERO_BUCKET, hero.poster_path) : null;
@@ -819,7 +837,7 @@ async function renderHero() {
         const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'video');
         await admin.setHeroMedia({ video_path: r.path });
         toast('Vídeo do Hero atualizado com sucesso.', 'success');
-        await renderHero();
+        await router();
       } catch (err) { toast(err.message || 'Não foi possível enviar o vídeo. Verifique o formato e tente novamente.', 'error'); vInput.disabled = false; }
     });
     if (vRm) vRm.addEventListener('click', async () => {
@@ -828,7 +846,7 @@ async function renderHero() {
         await deleteMedia(HERO_BUCKET, hero.video_path);
         await admin.setHeroMedia({ video_path: null });
         toast('Vídeo personalizado removido. Site usa o vídeo padrão.', 'success');
-        await renderHero();
+        await router();
       } catch (err) { toast(err.message || 'Não foi possível remover o vídeo.', 'error'); vRm.disabled = false; }
     });
 
@@ -843,7 +861,7 @@ async function renderHero() {
         const r = await uploadMedia(HERO_BUCKET, f, 'hero', 'image');
         await admin.setHeroMedia({ poster_path: r.path });
         toast('Imagem de capa atualizada com sucesso.', 'success');
-        await renderHero();
+        await router();
       } catch (err) { toast(err.message || 'Não foi possível enviar a imagem.', 'error'); pInput.disabled = false; }
     });
     if (pRm) pRm.addEventListener('click', async () => {
@@ -852,7 +870,7 @@ async function renderHero() {
         await deleteMedia(HERO_BUCKET, hero.poster_path);
         await admin.setHeroMedia({ poster_path: null });
         toast('Imagem de capa removida. Site usa a imagem padrão.', 'success');
-        await renderHero();
+        await router();
       } catch (err) { toast(err.message || 'Não foi possível remover a imagem.', 'error'); pRm.disabled = false; }
     });
 
@@ -875,6 +893,7 @@ async function renderHero() {
       } catch (err) { toast(err.message || 'Não foi possível publicar o Hero.', 'error'); }
     });
   } catch (err) {
+    if (!isCurrentNavigation(runId)) return;
     root().innerHTML = shell('hero', `<div class="empty">Erro: ${esc(err.message)}</div>`);
   }
 }

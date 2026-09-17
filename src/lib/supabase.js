@@ -8,7 +8,7 @@
 // renders (with a graceful "catalog unavailable" state) when env vars
 // are not configured yet — this keeps the existing prototype intact.
 
-let client = null;
+let clientPromise = null;
 
 function getConfig() {
   const url = import.meta.env.VITE_SUPABASE_URL;
@@ -26,15 +26,15 @@ export function isSupabaseConfigured() {
 // Returns the shared Supabase client, or null when unconfigured.
 // Uses dynamic import so we never fail the whole bundle if the SDK
 // isn't installed yet (keeps the existing site runnable without dep).
-export async function getSupabase() {
-  if (client) return client;
+export function getSupabase() {
   const cfg = getConfig();
-  if (!cfg) return null;
-  const { createClient } = await import('@supabase/supabase-js');
-  client = createClient(cfg.url, cfg.anon, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
-  });
-  return client;
+  if (!cfg) return Promise.resolve(null);
+  if (!clientPromise) {
+    clientPromise = import('@supabase/supabase-js').then(({ createClient }) => createClient(cfg.url, cfg.anon, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    }));
+  }
+  return clientPromise;
 }
 
 export { getConfig };
