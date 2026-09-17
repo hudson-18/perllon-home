@@ -85,14 +85,14 @@
           <span>WhatsApp</span>
         </a>
 
-        <button class="header-burger" aria-label="Abrir menu" aria-expanded="false"><span></span></button>
+        <button class="header-burger" aria-label="Abrir menu" aria-expanded="false" aria-controls="mobile-menu"><span></span></button>
       </div>
     </div>
   </header>
 
   <!-- ===================== MOBILE MENU ===================== -->
   <div class="menu-backdrop" id="menu-backdrop"></div>
-  <aside class="mobile-menu" id="mobile-menu" aria-label="Menu mobile">
+  <aside class="mobile-menu" id="mobile-menu" aria-label="Menu mobile" aria-hidden="true" inert>
     <a href="#especializacao" class="nav-item">Especialização</a>
     <a href="#assistencia" class="nav-item">Assistência</a>
     <a href="#catalogo" class="nav-item">Catálogo</a>
@@ -419,7 +419,7 @@
   </a>
 
   <!-- Toast -->
-  <div class="toast-wrap" id="toast-wrap"></div>
+  <div class="toast-wrap" id="toast-wrap" aria-live="polite" aria-atomic="false"></div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

@@ -73,8 +73,9 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ── Focus ── */
 :focus-visible {
-  outline: 2px solid var(--color-orange);
-  outline-offset: 3px;
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--color-navy-light);
   border-radius: 4px;
 }
 

@@ -17,6 +17,7 @@
   --color-orange-dark: #E67800;    
   --color-orange-light: #FF9B2E;
   --color-orange-tint: #FFF4EA;    
+  --color-orange-text: #9A4700;    /* Accessible brand accent on light surfaces */
 
   /* Text over orange (WCAG AA compliant) */
   --color-on-orange: #011826;      
@@ -31,8 +32,8 @@
   
   --color-ink: #1D1D1F;            /* Premium dark grey, softer than pure #000 */
   --color-text: #424245;           /* Secondary text, highly legible */
-  --color-text-secondary: #6E6E73;
-  --color-text-muted: #86868B;
+  --color-text-secondary: #5F5F64;
+  --color-text-muted: #6E6E73;
 
   /* Borders: significantly softer, almost invisible unless contrasting surfaces */
   --color-border: rgba(0, 0, 0, 0.06);
@@ -43,8 +44,8 @@
   /* === FUNCTIONAL === */
   --color-whatsapp: #25D366;
   --color-whatsapp-dark: #1EBD5A;
-  --color-success: #0FA968;
-  --color-danger: #E0453A;
+  --color-success: #087A4B;
+  --color-danger: #B42318;
 
   /* === TYPOGRAPHY === */
   /* Inter maintained but applied with refined scale and tracking */
