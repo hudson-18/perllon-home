@@ -10,6 +10,7 @@ import './styles/sections.css';
 
 import { fetchProducts as fetchProductsRemote, fetchSpotlight, fetchHeroMedia, fetchCartValidation, isSupabaseConfigured } from './lib/catalog.js';
 import { mediaPublicUrl, HERO_BUCKET } from './lib/storage.js';
+import { normalizeCtaHref } from './lib/url.js';
 import fallbackIphone17 from './assets/images/iphone-17-256gb-preto.jpg';
 import fallbackIphone16 from './assets/images/iphone-16-128gb.jpg';
 import fallbackIphone15ProMax from './assets/images/iphone-15-pro-max-256gb.jpg';
@@ -922,9 +923,9 @@ async function initHero() {
     if (hero.ctaLabel) {
       cta.innerHTML = `${esc(hero.ctaLabel)} <span class="arrow">→</span>`;
     }
-    if (hero.ctaHref) {
-      cta.href = hero.ctaHref;
-    }
+    const safeCtaHref = normalizeCtaHref(hero.ctaHref);
+    if (safeCtaHref) cta.href = safeCtaHref;
+    else if (hero.ctaHref) console.warn('[perllon] unsafe hero CTA ignored; using static destination.');
   }
 }
 

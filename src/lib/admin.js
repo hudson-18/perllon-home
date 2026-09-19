@@ -5,6 +5,7 @@
 // written alongside mutations. No service role in the browser.
 
 import { getSupabase } from './supabase.js';
+import { normalizeCtaHref } from './url.js';
 
 // ---------- session / auth ----------
 export async function signIn(email, password) {
@@ -42,7 +43,10 @@ export async function currentProfile() {
     .eq('id', user.user.id)
     .maybeSingle();
   if (error) throw error;
-  return data || null;
+  // Keep an authenticated account without a staff profile distinct from an
+  // absent/expired session so the Admin can show a permission error and offer
+  // a real sign-out instead of looping back to the login form.
+  return data || { id: user.user.id, full_name: null, role: null };
 }
 
 export async function hasRole(...slugs) {
@@ -96,10 +100,7 @@ export async function upsertCategory({ id, name, sort_order }) {
 export async function writeAudit({ action, entity, entityId, before = null, after = null, metadata = null }) {
   try {
     const sb = await getSupabase();
-    const { data: user } = await sb.auth.getUser();
     const { error } = await sb.from('audit_logs').insert({
-      actor_id: user?.user?.id || null,
-      actor_email: user?.user?.email || null,
       action,
       entity,
       entity_id: entityId != null ? String(entityId) : null,
@@ -251,15 +252,22 @@ export async function getHeroMedia() {
 }
 
 export async function setHeroMedia(fields) {
-  const sb = await getSupabase();
   // Only touch fields actually provided (key present) — prevents a stale or
   // unrelated caller from clobbering video_path/poster_path when it only
   // means to edit the title. Explicit null still clears a field.
   const KEYS = ['video_path', 'poster_path', 'title', 'subtitle', 'cta_label', 'cta_href', 'active'];
   const patch = {};
   for (const k of KEYS) {
-    if (k in fields) patch[k] = fields[k] ?? null;
+    if (!(k in fields)) continue;
+    if (k === 'cta_href' && fields[k] != null) {
+      const safeHref = normalizeCtaHref(fields[k]);
+      if (!safeHref) throw new Error('O link do CTA deve usar HTTP, HTTPS, e-mail, telefone ou um destino interno.');
+      patch[k] = safeHref;
+    } else {
+      patch[k] = fields[k] ?? null;
+    }
   }
+  const sb = await getSupabase();
   const existing = await getHeroMedia();
   if (existing) {
     const { data, error } = await sb.from('hero_media')

@@ -31,7 +31,8 @@ Fora de escopo: infraestrutura de terceiros não controlada pelo projeto
 | Upload malicioso | MIME allowlist (JPG/PNG/WebP/AVIF), máx 8 MB, sem SVG |
 | Vazamento de secrets | Sem service_role no frontend; `.env` fora do Git |
 | SQL injection | PostgREST parametrizado (sem SQL concatenado) |
-| Tamper de audit log | Append-only (sem UPDATE/DELETE via RLS) |
+| Tamper de audit log | Append-only; autoria e horário sobrescritos no banco a partir da sessão |
+| CTA dinâmico malicioso | Allowlist de protocolos no Admin, persistência, banco e renderização pública |
 
 Veja a Mission 005-C.7 para o red-team completo e o relatório por vetor.
 
@@ -40,5 +41,7 @@ Veja a Mission 005-C.7 para o red-team completo e o relatório por vetor.
 - `service_role` key **nunca** entra no bundle do navegador.
 - Autorização no banco (RLS), nunca só no frontend.
 - Valores monetários em centavos inteiros (sem floating point).
+- Buckets aplicam allowlist de MIME e limite de tamanho no Supabase Storage;
+  as policies de escrita continuam restritas a `admin` e `editor`.
 - `prefers-reduced-motion` respeitado; o `?motion=preview` é restrito a
   localhost (não existe em produção).

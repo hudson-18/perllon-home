@@ -7,10 +7,11 @@
 // reflects it (the UI hides nothing the DB doesn't already protect).
 
 import './admin.css';
-import { isSupabaseConfigured } from '../lib/supabase.js';
+import { getSupabase, isSupabaseConfigured } from '../lib/supabase.js';
 import * as admin from '../lib/admin.js';
 import { money } from '../lib/catalog.js';
 import { uploadProductImage, deleteProductImage, uploadMedia, deleteMedia, mediaPublicUrl, HERO_BUCKET } from '../lib/storage.js';
+import { normalizeCtaHref } from '../lib/url.js';
 import logoPerllonUrl from '../assets/images/logo-perllon.svg';
 
 const $ = (s, c = document) => c.querySelector(s);
@@ -65,6 +66,7 @@ function reportAdminError(error, fallback, allowSafeMessage = false) {
 // ---------- Routing ----------
 let currentProfile = null;
 let navigationRunId = 0;
+const ADMIN_PANEL_ROLES = new Set(['admin', 'editor', 'viewer']);
 
 function isCurrentNavigation(runId) {
   return runId === navigationRunId;
@@ -118,6 +120,12 @@ async function router() {
     return;
   }
   if (!isCurrentNavigation(runId)) return;
+  if (profile && !ADMIN_PANEL_ROLES.has(profile.role?.slug)) {
+    currentProfile = null;
+    root().innerHTML = accessDenied();
+    $('#access-denied-logout')?.addEventListener('click', doLogout);
+    return;
+  }
   currentProfile = profile;
   if (!profile && name !== 'login') {
     location.hash = '#/login';
@@ -188,7 +196,7 @@ function shell(active, content) {
 }
 
 async function doLogout() {
-  const buttons = [$('#logout-btn'), $('#logout-btn-mobile')].filter(Boolean);
+  const buttons = [$('#logout-btn'), $('#logout-btn-mobile'), $('#access-denied-logout')].filter(Boolean);
   if (!buttons.length || buttons.some((button) => button.dataset.pending === 'true')) return;
   buttons.forEach((button) => beginPending(button, 'Saindo…'));
   try {
@@ -1075,6 +1083,13 @@ async function renderHero(_id, runId) {
     $('#hero-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
+      const ctaHrefInput = (fd.get('cta_href') || '').toString().trim();
+      const ctaHref = ctaHrefInput ? normalizeCtaHref(ctaHrefInput) : null;
+      if (ctaHrefInput && !ctaHref) {
+        toast('Use um link HTTP, HTTPS, e-mail, telefone ou um destino interno válido.', 'error');
+        e.currentTarget.elements.cta_href?.focus();
+        return;
+      }
       const submitButton = e.currentTarget.querySelector('button[type="submit"]');
       if (!beginPending(submitButton, 'Salvando…')) return;
       try {
@@ -1085,7 +1100,7 @@ async function renderHero(_id, runId) {
           title: (fd.get('title') || '').toString().trim() || null,
           subtitle: (fd.get('subtitle') || '').toString().trim() || null,
           cta_label: (fd.get('cta_label') || '').toString().trim() || null,
-          cta_href: (fd.get('cta_href') || '').toString().trim() || null,
+          cta_href: ctaHref,
           active: fd.get('active') === 'on',
         });
         toast('Hero publicado.', 'success');
@@ -1115,6 +1130,34 @@ function sessionUnavailable() {
     </div>`;
 }
 
+function accessDenied() {
+  return `
+    <div class="login-wrap">
+      <div class="login-card">
+        <img class="login-logo" src="${logoPerllonUrl}" alt="PERLLON">
+        <h1>Acesso administrativo não autorizado</h1>
+        <p class="login-sub">Sua conta está autenticada, mas não possui um perfil administrativo válido.</p>
+        <button type="button" class="btn btn-primary" id="access-denied-logout" style="width:100%">Sair</button>
+      </div>
+    </div>`;
+}
+
+async function observeAuthState() {
+  try {
+    const sb = await getSupabase();
+    sb?.auth.onAuthStateChange((event) => {
+      if (event !== 'SIGNED_OUT') return;
+      currentProfile = null;
+      if (location.hash === '#/login') router();
+      else location.hash = '#/login';
+    });
+  } catch (error) {
+    // The router still verifies the session on every navigation; this observer
+    // only shortens recovery when Supabase emits an asynchronous sign-out.
+    console.error('Não foi possível observar mudanças da sessão administrativa.', error);
+  }
+}
+
 // ---------- Not configured ----------
 function notConfigured() {
   return `
@@ -1135,4 +1178,5 @@ function notConfigured() {
 // ---------- Boot ----------
 window.addEventListener('hashchange', router);
 const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
+observeAuthState();
 router();

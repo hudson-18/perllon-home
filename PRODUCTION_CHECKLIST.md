@@ -27,7 +27,10 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 - [x] Sem secrets no código/dist; `.env.local`/`.env.production` fora do Git
 - [x] `npm audit` = 0 vulnerabilidades
 - [x] XSS: dados dinâmicos escapados antes de `innerHTML`
-- [ ] Configurar headers definitivos no host (CSP, X-Content-Type-Options, Referrer-Policy) — `public/_headers` preparado
+- [x] Headers para Netlify/Cloudflare definidos em `public/_headers`; o build injeta somente a origem de `VITE_SUPABASE_URL` na CSP
+- [ ] Ativar **Leaked Password Protection** em Authentication → Settings no Supabase (configuração de projeto; não é migration SQL)
+- [ ] Definir política de MFA e cadastrar fatores nas contas administrativas antes de torná-lo obrigatório
+- [ ] Implementar recuperação de senha somente após configurar e validar Site URL/Redirect URLs e uma rota de redefinição
 
 ## SEO / Metadata
 - [x] `title`, `meta description`, `canonical`, `theme-color`
@@ -65,7 +68,8 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 - [ ] (Futuro) conectar domínio real + atualizar canonical/OG/sitemap
 
 ## Supabase (já provisionado)
-- [x] Migrations 0001–0013 aplicadas
+- [x] Migrations 0001–0015 e troca atômica de especificações aplicadas
+- [x] Hardening de Storage, auditoria, helpers SQL e CTA aplicado
 - [x] 7 produtos canônicos + Spotlight iPhone 17
 - [x] Bucket `product-images` público; escrita staff-only
 - [x] Admin real (`Administrador`) preservado
