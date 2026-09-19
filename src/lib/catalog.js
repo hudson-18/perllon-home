@@ -9,6 +9,7 @@
 // from the database at cart validation time.
 
 import { getSupabase, isSupabaseConfigured } from './supabase.js';
+import { specificationKey } from './specifications.js';
 
 export const money = (cents) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
@@ -48,9 +49,12 @@ function resolveImages(rows = []) {
 // the numeric centavo value stays available for cart validation.
 export function normalizeProduct(row, specs = []) {
   const specsMap = {};
-  specs.forEach((s) => { specsMap[s.key] = s.value; });
-  const storage = specsMap['Armazenamento'] || null;
-  const color = specsMap['Cor'] || null;
+  specs.forEach((s) => {
+    const key = specificationKey(s.key);
+    if (key === s.key || !Object.hasOwn(specsMap, key)) specsMap[key] = s.value;
+  });
+  const storage = specsMap.storage || null;
+  const color = specsMap.color || null;
   const priceReal = row.price_cents / 100;
   const { image, images } = resolveImages(row.product_images);
   return {
@@ -61,8 +65,8 @@ export function normalizeProduct(row, specs = []) {
     brand: row.brand?.name || null,
     storage,
     color,
-    condition: specsMap['Condição'] || null,
-    warranty: specsMap['Garantia'] || null,
+    condition: specsMap.condition || null,
+    warranty: specsMap.warranty || null,
     price: priceReal,                        // reals (matches static JSON unit)
     price_cents: row.price_cents,            // integer centavos (validation)
     priceFormatted: money(row.price_cents),
@@ -72,8 +76,8 @@ export function normalizeProduct(row, specs = []) {
     image,                                    // resolved public URL
     images,
     status: row.status,
-    simType: specsMap['Chip/SIM'] || null,
-    battery: specsMap['Bateria'] || null,
+    simType: specsMap.sim_type || null,
+    battery: specsMap.battery || null,
     specs: specs,
   };
 }

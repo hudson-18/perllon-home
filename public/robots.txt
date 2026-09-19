@@ -9,5 +9,5 @@ Allow: /
 # o acesso continua bloqueado por Auth/RLS no servidor).
 Disallow: /admin.html
 
-# Sitemap (atualizar quando o catálogo público mudar).
+# Apenas páginas com URLs próprias e indexáveis entram no sitemap.
 Sitemap: https://perllon.com.br/sitemap.xml

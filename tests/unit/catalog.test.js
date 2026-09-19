@@ -7,6 +7,7 @@ vi.mock('../../src/lib/supabase.js', () => ({
 }));
 
 import { fetchCartValidation, fetchProducts, installmentLabel, money, normalizeProduct } from '../../src/lib/catalog.js';
+import { specificationKey, specificationLabel } from '../../src/lib/specifications.js';
 
 const row = {
   id: 'db-product-id', slug: 'iphone-17', name: 'iPhone 17',
@@ -36,6 +37,19 @@ function queryResult(result, onCall = () => {}) {
 beforeEach(() => supabase.getSupabase.mockReset());
 
 describe('catalog data boundary', () => {
+  it('reads stable specification keys and legacy labels without changing editor labels', () => {
+    const specs = [
+      { key: 'Armazenamento', value: '128 GB' },
+      { key: 'storage', value: '256 GB' },
+      { key: 'color', value: 'Azul' },
+      { key: 'sim_type', value: 'eSIM' },
+    ];
+    expect(normalizeProduct(row, specs)).toMatchObject({ storage: '256 GB', color: 'Azul', simType: 'eSIM' });
+    expect(specificationKey('Armazenamento')).toBe('storage');
+    expect(specificationLabel('storage')).toBe('Armazenamento');
+    expect(specificationKey('RAM')).toBe('RAM');
+  });
+
   it('normalizes integer centavos, specifications and primary image', () => {
     const product = normalizeProduct(row, row.product_specifications);
     expect(product).toMatchObject({

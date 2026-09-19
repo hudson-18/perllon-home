@@ -7,44 +7,17 @@ import './styles/tokens.css';
 import './styles/base.css';
 import './styles/components.css';
 import './styles/sections.css';
+import './styles/cart.css';
+import { esc, money, waUrl } from './public/format.js';
+import { createCart, reconcileCartItems } from './public/cart.js';
+import { initCatalog } from './public/catalog.js';
+import { initSpotlight, initHero } from './public/content.js';
 
-import { fetchProducts as fetchProductsRemote, fetchSpotlight, fetchHeroMedia, fetchCartValidation, isSupabaseConfigured } from './lib/catalog.js';
-import { mediaPublicUrl, HERO_BUCKET } from './lib/storage.js';
-import { normalizeCtaHref } from './lib/url.js';
-import fallbackIphone17 from './assets/images/iphone-17-256gb-preto.jpg';
-import fallbackIphone16 from './assets/images/iphone-16-128gb.jpg';
-import fallbackIphone15ProMax from './assets/images/iphone-15-pro-max-256gb.jpg';
-import fallbackIphone14ProMax from './assets/images/iphone-14-pro-max-128gb.jpg';
-import fallbackIphone14Pro from './assets/images/iphone-14-pro-512gb.jpg';
-import fallbackSmartBand from './assets/images/xiaomi-smart-band-10.jpg';
-import fallbackSmartwatch from './assets/images/smartwatch-wb.jpg';
+import { fetchCartValidation, isSupabaseConfigured } from './lib/catalog.js';
 
 // ---------- Utils ----------
 const $ = (s, c = document) => c.querySelector(s);
 const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
-
-const WHATSAPP = '5584998405201';
-const waUrl = (text) =>
-  `https://api.whatsapp.com/send/?phone=${WHATSAPP}&type=phone_number&app_absent=0&text=${encodeURIComponent(text)}`;
-
-const money = (v) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-
-// Static demo data stores stable asset keys. Vite resolves these imports to the
-// hashed production URLs, so the fallback never depends on /src paths at runtime.
-const FALLBACK_PRODUCT_IMAGES = {
-  'iphone-17-256gb-preto.jpg': fallbackIphone17,
-  'iphone-16-128gb.jpg': fallbackIphone16,
-  'iphone-15-pro-max-256gb.jpg': fallbackIphone15ProMax,
-  'iphone-14-pro-max-128gb.jpg': fallbackIphone14ProMax,
-  'iphone-14-pro-512gb.jpg': fallbackIphone14Pro,
-  'xiaomi-smart-band-10.jpg': fallbackSmartBand,
-  'smartwatch-wb.jpg': fallbackSmartwatch,
-};
-
-// HTML-escape dynamic data before any innerHTML interpolation (XSS hardening).
-// Never interpolate DB/localStorage/user input into HTML without this.
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // ---------- Motion preview mode (dev-only) ----------
 // Developer escape hatch to SEE the motion on machines whose OS flags
@@ -132,44 +105,10 @@ function trapLayerFocus(event, layer) {
   }
 }
 
-// ---------- Cart store (localStorage) ----------
-const Cart = {
-  key: 'perllon_cart',
-  items: [],
-  load() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(this.key) || '[]');
-      this.items = Array.isArray(raw) ? raw.filter((i) => i && typeof i.id === 'string' && typeof i.price === 'number' && Number.isFinite(i.price) && typeof i.qty === 'number' && i.qty > 0)
-        .map((i) => ({ ...i, qty: Math.min(99, Math.max(1, Math.floor(i.qty))), price: i.price }))
-        : [];
-    }
-    catch { this.items = []; }
-  },
-  save() {
-    try { localStorage.setItem(this.key, JSON.stringify(this.items)); } catch (e) { /* storage may be blocked */ }
-    document.dispatchEvent(new CustomEvent('cart:updated'));
-  },
-  add(p) {
-    const found = this.items.find((i) => i.id === p.id);
-    if (found) found.qty += 1;
-    else this.items.push({ id: p.id, name: p.name, price: p.price, image: p.image, qty: 1, installments: p.installments, storage: p.storage, color: p.color });
-    this.save();
-    toast(`${p.name} adicionado ao carrinho`);
-    // Brief beat so the button feedback (is-added) reads before the drawer opens.
-    setTimeout(openCart, 240);
-  },
-  setQty(id, qty) {
-    const it = this.items.find((i) => i.id === id);
-    if (!it) return;
-    if (qty <= 0) { this.remove(id); return; }
-    it.qty = Math.min(99, qty);
-    this.save();
-  },
-  remove(id) { this.items = this.items.filter((i) => i.id !== id); this.save(); },
-  replace(items) { this.items = items; this.save(); },
-  count() { return this.items.reduce((n, i) => n + i.qty, 0); },
-  subtotal() { return this.items.reduce((n, i) => n + i.price * i.qty, 0); },
-};
+const Cart = createCart((p) => {
+  toast(`${p.name} adicionado ao carrinho`);
+  setTimeout(openCart, 240);
+}, () => toast('Não foi possível salvar o carrinho neste navegador. Os itens podem desaparecer ao atualizar a página.'));
 Cart.load();
 
 // Single source of truth re-render: every cart mutation re-paints the drawer if open.
@@ -434,51 +373,6 @@ function closeNameModal() {
   nameModalReturnFocus = null;
 }
 
-function validatedInstallments(product) {
-  if (!product.installments_count || !product.installment_cents) return null;
-  return `${product.installments_count}x de ${money(product.installment_cents / 100)}`;
-}
-
-function reconcileCartItems(items, fresh) {
-  const reconciled = [];
-  let unavailableCount = 0;
-  let priceChangeCount = 0;
-  let detailChangeCount = 0;
-
-  items.forEach((item) => {
-    const current = fresh[item.id];
-    if (!current || current.status !== 'active') {
-      unavailableCount += 1;
-      return;
-    }
-    if (!Number.isInteger(current.price_cents) || current.price_cents < 0) {
-      throw new Error(`Preço inválido recebido para o produto ${item.id}.`);
-    }
-
-    const nextPrice = current.price_cents / 100;
-    const nextInstallments = validatedInstallments(current);
-    const nextName = current.name || item.name;
-    if (nextPrice !== item.price) priceChangeCount += 1;
-    if (nextName !== item.name || nextInstallments !== (item.installments || null)) detailChangeCount += 1;
-
-    reconciled.push({
-      ...item,
-      name: nextName,
-      price: nextPrice,
-      price_cents: current.price_cents,
-      installments: nextInstallments,
-    });
-  });
-
-  return {
-    items: reconciled,
-    unavailableCount,
-    priceChangeCount,
-    detailChangeCount,
-    changed: unavailableCount > 0 || priceChangeCount > 0 || detailChangeCount > 0,
-  };
-}
-
 // Re-validate cart against the database before generating the order.
 // Connected mode blocks on validation errors. Demo mode intentionally uses the
 // static catalog because no backend is configured.
@@ -560,96 +454,6 @@ function updateCartBadge() {
       _lastBadgeCount = c;
     }
   }
-}
-
-// ---------- Catalog preview render ----------
-async function loadFallbackProducts() {
-  const response = await fetch('/data/products.json');
-  if (!response.ok) throw new Error(`Fallback catalog request failed (${response.status}).`);
-  const data = await response.json();
-  if (!Array.isArray(data)) throw new Error('Fallback catalog response is invalid.');
-  return data.map((product) => {
-    const image = FALLBACK_PRODUCT_IMAGES[product.image];
-    if (!image) throw new Error(`Fallback image is not mapped: ${product.image}`);
-    return { ...product, image };
-  });
-}
-
-// Supabase is authoritative whenever configured. The static catalog is only
-// used by the explicit unconfigured/demo mode.
-async function loadProducts() {
-  if (isSupabaseConfigured()) {
-    const { data } = await fetchProductsRemote();
-    if (!Array.isArray(data)) throw new Error('Supabase catalog response is invalid.');
-    return data;
-  }
-  return loadFallbackProducts();
-}
-
-async function initCatalog() {
-  const rail = $('#catalog-rail');
-  if (!rail) return;
-  let products = [];
-  try {
-    products = await loadProducts();
-  } catch (e) {
-    rail.innerHTML = '<p class="catalog-error">Não foi possível carregar o catálogo no momento.</p>';
-    return;
-  }
-
-  // Local cache of active products for cart validation at checkout
-  // (id → price_cents). Prices are always re-validated against backend.
-  window.__perllonCatalog = products;
-
-  if (products.length === 0) {
-    rail.innerHTML = '<p class="catalog-message">Nenhum aparelho disponível no momento. Fale conosco pelo WhatsApp para consultar reposições.</p>';
-    return;
-  }
-
-  rail.innerHTML = products.map((p, idx) => {
-    const name = esc(p.name);
-    const category = esc(p.category || '');
-    const storage = esc(p.storage || '');
-    const color = esc(p.color || '');
-    const installments = esc(p.installments || '');
-    const image = esc(p.image || '');
-    const spec = [storage, color].filter(Boolean).join(' · ') || 'Consulte especificações';
-    // Staggered entrance (perceptible cadence, capped so long rails stay lively).
-    const delay = Math.min(idx * 95, 380);
-    return `
-    <article class="pcard" data-reveal="scale" style="--reveal-delay:${delay}ms" data-id="${esc(p.id)}" data-name="${name}" data-price="${esc(p.price)}" data-image="${image}" data-storage="${storage}" data-color="${color}" data-installments="${installments}">
-      <div class="pcard-media"><img src="${image}" alt="${name}${storage ? ' ' + storage : ''}" loading="lazy"></div>
-      <div class="pcard-body">
-        <span class="pcard-cat">${category}</span>
-        <h3 class="pcard-name">${name}</h3>
-        <span class="pcard-spec">${spec}</span>
-        <div class="pcard-foot">
-          <div>
-            <div class="pcard-price">${money(p.price)}</div>
-            ${p.installments ? `<div class="pcard-install">${installments}</div>` : ''}
-          </div>
-        </div>
-        <button class="btn btn-primary btn-sm" data-add>Adicionar ao carrinho</button>
-      </div>
-    </article>`;
-  }).join('');
-
-  // Observe new cards (re-run reveal so injected cards animate in).
-  initReveal();
-
-  $$('#catalog-rail [data-add]').forEach((btn) =>
-    btn.addEventListener('click', () => {
-      const card = btn.closest('.pcard');
-      // Visual confirmation on the button before the drawer takes over.
-      btn.classList.add('is-added');
-      setTimeout(() => btn.classList.remove('is-added'), 700);
-      Cart.add({
-        id: card.dataset.id, name: card.dataset.name, price: +card.dataset.price,
-        image: card.dataset.image, storage: card.dataset.storage, color: card.dataset.color,
-        installments: card.dataset.installments,
-      });
-    })
-  );
 }
 
 // ---------- Scroll reveal ----------
@@ -812,130 +616,17 @@ function initHeroEntrance() {
   }));
 }
 
-// ---------- Spotlight (dynamic: product selected in Admin) ----------
-// The public Spotlight section renders the product the admin chose in the
-// "Destaque" area. Source of truth is Supabase (`spotlight` table). The
-// static iPhone 17 markup in index.html remains as a graceful fallback for
-// when the backend is not configured (prototype/offline).
-async function initSpotlight() {
-  const elName = $('#spotlight-name');
-  if (!elName) return;                  // section not present
-  if (!isSupabaseConfigured()) return;  // keep static fallback value
-
-  let spot;
-  try {
-    spot = await fetchSpotlight();
-  } catch (e) {
-    console.warn('[perllon] spotlight load failed; using static fallback.', e);
-    return;
-  }
-  if (!spot || !spot.product) return;   // no active spotlight → keep fallback
-
-  const p = spot.product;
-
-  // Name
-  elName.textContent = p.name;
-
-  // Editorial description (if admin set one, else keep existing text)
-  if (spot.editorialBody) $('#spotlight-desc').textContent = spot.editorialBody;
-
-  // Specs grid (derive from product specs — only confirmed fields)
-  const specs = [];
-  if (p.storage) specs.push(['Armazenamento', p.storage]);
-  if (p.color) specs.push(['Cor', p.color]);
-  if (p.condition) specs.push(['Estado', p.condition]);
-  if (p.simType) specs.push(['Chip', p.simType]);
-  if (p.warranty) specs.push(['Garantia', p.warranty]);
-  if (p.battery) specs.push(['Bateria', p.battery]);
-  const specsEl = $('#spotlight-specs');
-  if (specsEl && specs.length) {
-    specsEl.innerHTML = specs.map(([k, v]) => `<div class="spec-item"><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join('');
-  }
-
-  // Price + installments
-  if (p.priceFormatted) $('#spotlight-price').textContent = p.priceFormatted;
-  const installEl = $('#spotlight-install');
-  if (p.installments) installEl.textContent = p.installments;
-  else installEl.textContent = 'Consulte condições';
-
-  // Image — prefer a custom promotional image, else the product's primary.
-  const imgEl = $('#spotlight-image');
-  const overrideUrl = spot.imageOverride ? mediaPublicUrl('product-images', spot.imageOverride) : null;
-  const finalImg = overrideUrl || p.image;
-  if (finalImg) {
-    imgEl.src = finalImg;
-    imgEl.alt = `${p.name}${p.storage ? ' ' + p.storage : ''} em destaque na PERLLON`;
-  }
-
-  // WhatsApp CTA → contextualized to the selected product
-  const waEl = $('#spotlight-wa');
-  if (waEl) {
-    const parts = [p.name, p.storage, p.color].filter(Boolean).join(', ');
-    const msg = `Olá! Tenho interesse no ${parts}. Gostaria de saber mais.`;
-    waEl.href = waUrl(msg);
-  }
-}
-
-// ---------- Hero (dynamic media/editorial from Supabase) ----------
-// Reads the active hero_media row and swaps video/poster/title/subtitle/CTA.
-// Falls back to the static hero when Supabase is unconfigured or there is no
-// active config (resilient — never leaves a broken/empty hero).
-async function initHero() {
-  const root = $('#hero-video');
-  if (!root) return;
-  if (!isSupabaseConfigured()) return;   // keep static hero
-
-  let hero;
-  try {
-    hero = await fetchHeroMedia();
-  } catch (e) {
-    console.warn('[perllon] hero media load failed; using static hero.', e);
-    return;
-  }
-  if (!hero || !hero.active) return;     // inactive → fallback static
-
-  // Video — set src directly and force reload. Merely swapping a <source>
-  // child's src attribute does NOT trigger a reload in browsers, so the
-  // player would keep the old (static) media. Call load() to actually swap.
-  const videoUrl = hero.videoPath ? mediaPublicUrl(HERO_BUCKET, hero.videoPath) : null;
-  if (videoUrl) {
-    root.src = videoUrl;
-    root.load();
-  }
-
-  // Poster / fallback image
-  const posterUrl = hero.posterPath ? mediaPublicUrl(HERO_BUCKET, hero.posterPath) : null;
-  if (posterUrl) root.setAttribute('poster', posterUrl);
-
-  // Editorial title/subtitle (only when admin set something, preserve html accent)
-  if (hero.title) {
-    const t = $('#hero-title');
-    if (t) t.textContent = hero.title;
-  }
-  if (hero.subtitle) {
-    const l = $('#hero-lead');
-    if (l) l.textContent = hero.subtitle;
-  }
-
-  // Primary CTA (label + href)
-  const cta = $('#hero-cta');
-  if (cta) {
-    if (hero.ctaLabel) {
-      cta.innerHTML = `${esc(hero.ctaLabel)} <span class="arrow">→</span>`;
-    }
-    const safeCtaHref = normalizeCtaHref(hero.ctaHref);
-    if (safeCtaHref) cta.href = safeCtaHref;
-    else if (hero.ctaHref) console.warn('[perllon] unsafe hero CTA ignored; using static destination.');
-  }
-}
-
 // ---------- Boot ----------
 document.addEventListener('DOMContentLoaded', () => {
   initHeader();
   initReveal();
-  initCatalog();
-  initSpotlight();
-  initHero();
+  void initCatalog({ addToCart: (product) => Cart.add(product), reveal: initReveal }).catch((error) => {
+    console.error('[perllon] catalog render failed.', error);
+    const rail = $('#catalog-rail');
+    if (rail) rail.innerHTML = '<p class="catalog-error">Não foi possível carregar o catálogo no momento.</p>';
+  });
+  void initSpotlight().catch((error) => console.error('[perllon] spotlight render failed.', error));
+  void initHero({ reduceMotion }).catch((error) => console.error('[perllon] hero render failed.', error));
   initCounters();
   initStatus();
   initWaFloat();
@@ -944,55 +635,3 @@ document.addEventListener('DOMContentLoaded', () => {
   updateCartBadge();
   $('.header-cart')?.addEventListener('click', openCart);
 });
-
-// cart drawer styles (injected once)
-const cartCSS = `
-.cart-drawer{position:fixed;top:0;right:0;bottom:0;width:min(92vw,400px);background:#fff;z-index:600;transform:translateX(100%);opacity:.4;transition:transform .5s cubic-bezier(.22,1,.36,1),opacity .4s cubic-bezier(.22,1,.36,1);display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(4,20,33,.25)}
-.cart-drawer.is-open{transform:none;opacity:1}
-.cart-backdrop{position:fixed;inset:0;background:rgba(4,20,33,.55);z-index:599;opacity:0;visibility:hidden;transition:.4s}
-.cart-backdrop.is-open{opacity:1;visibility:visible}
-.cart-head{display:flex;justify-content:space-between;align-items:center;padding:1.2rem 1.4rem;border-bottom:1px solid var(--color-border)}
-.cart-head h3{margin:0;font-size:1.2rem}
-.cart-head button{font-size:1.6rem;line-height:1;width:36px;height:36px;border-radius:50%}
-.cart-body{flex:1;overflow-y:auto;padding:1rem 1.4rem}
-.cart-row{display:flex;gap:1rem;align-items:center;padding:1rem 0;border-bottom:1px solid var(--color-border);animation:cart-row-in .28s cubic-bezier(.22,1,.36,1)}
-@keyframes cart-row-in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
-.cart-row img{width:56px;height:56px;object-fit:contain;border-radius:10px;background:var(--color-bg)}
-.cart-row-info{flex:1;display:flex;flex-direction:column;gap:.15rem;min-width:0}
-.cart-row-info strong{font-size:.95rem}
-.cart-spec{font-size:.8rem;color:var(--color-text-muted)}
-.cart-price{font-weight:600;font-variant-numeric:tabular-nums}
-.cart-remove{align-self:flex-start;margin-top:.25rem;font-size:.78rem;color:var(--color-danger);text-decoration:underline;padding:.3rem 0;background:none;border:0;cursor:pointer}
-.cart-remove:hover{opacity:.75}
-.cart-qty{display:flex;align-items:center;gap:.35rem;border:1px solid var(--color-border);border-radius:999px;padding:.2rem}
-.cart-qty button{width:34px;height:34px;border-radius:50%;font-size:1.2rem;line-height:1;display:flex;align-items:center;justify-content:center;color:var(--color-ink)}
-.cart-qty button:hover{background:var(--color-bg)}
-.cart-qty button:active{background:var(--color-orange-tint);transform:scale(.9)}
-.cart-qty .qty-num{min-width:22px;text-align:center;font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums;animation:qty-pop .22s cubic-bezier(.34,1.56,.64,1)}
-@keyframes qty-pop{from{opacity:.3;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
-.cart-foot{padding:1.2rem 1.4rem;border-top:1px solid var(--color-border);display:flex;flex-direction:column;gap:1rem}
-.cart-total{display:flex;justify-content:space-between;font-size:1.1rem}
-.cart-total strong{font-variant-numeric:tabular-nums}
-.cart-empty{display:flex;flex-direction:column;align-items:center;padding:3rem 1rem;text-align:center;color:var(--color-text-secondary);animation:cart-row-in .28s cubic-bezier(.22,1,.36,1)}
-.cart-empty .cart-hint{font-size:.85rem;color:var(--color-text-muted);font-weight:400}
-
-/* Name capture modal */
-.name-modal-overlay{position:fixed;inset:0;background:rgba(4,20,33,.6);z-index:700;display:flex;align-items:center;justify-content:center;padding:1.25rem;opacity:0;visibility:hidden;transition:opacity .35s,visibility .35s}
-.name-modal-overlay.is-open{opacity:1;visibility:visible}
-.name-modal{background:#fff;border-radius:20px;width:100%;max-width:400px;padding:1.75rem;box-shadow:0 32px 80px rgba(4,20,33,.3);transform:translateY(28px) scale(.94);opacity:0;transition:transform .45s cubic-bezier(.22,1,.36,1),opacity .35s}
-.name-modal-overlay.is-open .name-modal{transform:none;opacity:1}
-.name-modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
-.name-modal-head h3{margin:0;font-size:1.25rem}
-.name-modal-x{width:36px;height:36px;border-radius:50%;font-size:1.4rem;line-height:1;color:var(--color-text-muted)}
-.name-modal-x:hover{background:var(--color-bg)}
-.name-modal-sub{color:var(--color-text-secondary);margin-bottom:1.2rem}
-.name-modal-form{display:flex;flex-direction:column;gap:1rem}
-.name-modal-form .input{width:100%}
-.name-modal-actions{display:flex;justify-content:flex-end;gap:.75rem;margin-top:.25rem}
-@media (prefers-reduced-motion: reduce){.name-modal,.name-modal-overlay{transition:none}.cart-row,.cart-empty,.cart-qty .qty-num{animation:none}}
-:root.motion-preview .cart-row,:root.motion-preview .cart-empty,:root.motion-preview .cart-qty .qty-num{animation-duration:var(--dur-base,300ms)!important}
-:root.motion-preview .name-modal,:root.motion-preview .name-modal-overlay{transition:transform .45s cubic-bezier(.22,1,.36,1),opacity .35s!important}
-`;
-const style = document.createElement('style');
-style.textContent = cartCSS;
-document.head.appendChild(style);

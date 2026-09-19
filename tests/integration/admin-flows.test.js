@@ -5,7 +5,7 @@ const state = vi.hoisted(() => ({
   admin: {
     currentProfile: vi.fn(), signIn: vi.fn(), signOut: vi.fn(),
     dashboardStats: vi.fn(), recentAudit: vi.fn(),
-    listBrands: vi.fn(), listCategories: vi.fn(), getProduct: vi.fn(),
+    listProductsAll: vi.fn(), listBrands: vi.fn(), listCategories: vi.fn(), getProduct: vi.fn(),
     createProduct: vi.fn(), updateProduct: vi.fn(), replaceSpecifications: vi.fn(),
     addProductImage: vi.fn(), removeProductImage: vi.fn(),
   },
@@ -69,6 +69,7 @@ beforeEach(() => {
   state.admin.recentAudit.mockResolvedValue([]);
   state.admin.listBrands.mockResolvedValue([]);
   state.admin.listCategories.mockResolvedValue([]);
+  state.admin.listProductsAll.mockResolvedValue([]);
   state.admin.getProduct.mockResolvedValue(structuredClone(product));
   state.admin.createProduct.mockResolvedValue({ id: 'created-product-id' });
   state.admin.updateProduct.mockResolvedValue({ id: product.id });
@@ -83,6 +84,19 @@ afterEach(() => {
 });
 
 describe('administrative authentication and authorization', () => {
+  it('keeps the latest dashboard when an older products request finishes later', async () => {
+    let finishProducts;
+    state.admin.listProductsAll.mockReturnValue(new Promise((resolve) => { finishProducts = resolve; }));
+    const root = await bootAdmin();
+    location.hash = '#/products';
+    const olderNavigation = state.route();
+    location.hash = '#/dashboard';
+    await state.route();
+    finishProducts([]);
+    await olderNavigation;
+    expect(root.querySelector('.main-head h2')?.textContent).toBe('Dashboard');
+  });
+
   it.each(['#logout-btn', '#logout-btn-mobile'])('binds %s after rendering and navigates only after signOut', async (selector) => {
     const root = await bootAdmin();
     await vi.waitFor(() => expect(root.querySelector(selector)).not.toBeNull());
@@ -129,6 +143,19 @@ describe('administrative authentication and authorization', () => {
 });
 
 describe('administrative product operations', () => {
+  it('shows familiar specification labels while saving stable keys', async () => {
+    state.admin.getProduct.mockResolvedValue({ ...product, product_specifications: [
+      { key: 'storage', value: '256 GB', sort_order: 0 },
+    ] });
+    const root = await readyProductForm();
+    const form = root.querySelector('#product-form');
+    expect(form.querySelector('.spec-row [data-k]').value).toBe('Armazenamento');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(state.admin.replaceSpecifications).toHaveBeenCalledWith(
+      product.id, [expect.objectContaining({ key: 'storage', value: '256 GB' })],
+    ));
+  });
+
   it('uses the persisted image ID for removal and deletes Storage after the database row', async () => {
     const order = [];
     state.storage.uploadProductImage.mockResolvedValue({ path: 'product-db-id/photo.jpg' });
