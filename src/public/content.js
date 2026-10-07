@@ -8,19 +8,28 @@ const $ = (s, c = document) => c.querySelector(s);
 
 // The poster remains visible until the video can actually be used.
 function activateHeroVideo(video, reduceMotion) {
-  if (reduceMotion() || window.matchMedia('(max-width: 560px)').matches) return;
+  const mobileViewport = window.matchMedia('(max-width: 560px)');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let observer = null;
   const start = () => {
-    if (!video.isConnected || video.src) return;
+    if (!video.isConnected || video.src || reduceMotion() || mobileViewport.matches) return;
     video.src = video.dataset.videoSrc || staticHeroVideo;
     video.load();
   };
-  if (!('IntersectionObserver' in window)) { start(); return; }
-  const observer = new IntersectionObserver((entries) => {
-    if (!entries.some((entry) => entry.isIntersecting)) return;
-    observer.disconnect();
-    start();
-  }, { rootMargin: '100px' });
-  observer.observe(video);
+  const watchVisibility = () => {
+    if (reduceMotion() || mobileViewport.matches || video.src || observer) return;
+    if (!('IntersectionObserver' in window)) { start(); return; }
+    observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      observer = null;
+      start();
+    }, { rootMargin: '100px' });
+    observer.observe(video);
+  };
+  watchVisibility();
+  mobileViewport.addEventListener('change', watchVisibility);
+  reducedMotion.addEventListener('change', watchVisibility);
 }
 
 // ---------- Spotlight (dynamic: product selected in Admin) ----------

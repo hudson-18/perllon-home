@@ -132,6 +132,43 @@ describe('public catalog', () => {
     expect(document.querySelector('#hero-video').getAttribute('src')).toBeNull();
   });
 
+  it('starts the deferred hero video when a mobile viewport becomes desktop-sized', async () => {
+    let heroObserver;
+    let mobile = true;
+    const viewportListeners = [];
+    const mobileQuery = {
+      get matches() { return mobile; },
+      addEventListener: (_event, listener) => viewportListeners.push(listener),
+    };
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn((query) => query.includes('max-width')
+        ? mobileQuery
+        : { matches: false, addEventListener() {} }),
+    });
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback) { this.callback = callback; }
+      observe(element) { if (element.id === 'hero-video') heroObserver = this; }
+      unobserve() {}
+      disconnect() {}
+    });
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+
+    await bootPublic({ hero: true });
+    await vi.waitFor(() => expect(catalog.hero).toHaveBeenCalledTimes(1));
+    const video = document.querySelector('#hero-video');
+    expect(video.getAttribute('src')).toBeNull();
+    expect(heroObserver).toBeUndefined();
+
+    mobile = false;
+    viewportListeners.forEach((listener) => listener());
+    expect(heroObserver).toBeDefined();
+    heroObserver.callback([{ isIntersecting: true }]);
+    expect(video.getAttribute('src')).toContain('iphone-17-hero');
+    expect(load).toHaveBeenCalledTimes(1);
+    load.mockRestore();
+  });
+
   it('renders Supabase products when returned', async () => {
     const rail = await bootPublic();
     await vi.waitFor(() => expect(rail.querySelectorAll('.pcard')).toHaveLength(1));
