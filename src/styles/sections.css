@@ -108,7 +108,7 @@
 }
 .hero-phone {
   position: relative;
-  width: min(420px, 100%);
+  width: min(390px, 100%);
   aspect-ratio: 3/4;
   border-radius: 36px;
   overflow: hidden;
