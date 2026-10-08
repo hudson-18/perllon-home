@@ -2,6 +2,7 @@ import { fetchSpotlight, fetchHeroMedia, isSupabaseConfigured } from '../lib/cat
 import { mediaPublicUrl, HERO_BUCKET } from '../lib/storage.js';
 import { normalizeCtaHref } from '../lib/url.js';
 import staticHeroVideo from '../assets/video/iphone-17-hero.mp4';
+import mobileHeroVideo from '../assets/video/iphone-17-hero-mobile.mp4';
 import { esc, waUrl } from './format.js';
 
 const $ = (s, c = document) => c.querySelector(s);
@@ -10,26 +11,54 @@ const $ = (s, c = document) => c.querySelector(s);
 function activateHeroVideo(video, reduceMotion) {
   const mobileViewport = window.matchMedia('(max-width: 560px)');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const connection = navigator.connection;
+  const shouldUsePoster = () => reduceMotion() || connection?.saveData ||
+    ['slow-2g', '2g'].includes(connection?.effectiveType);
   let observer = null;
+  const stop = () => {
+    observer?.disconnect();
+    observer = null;
+    if (!video.src) return;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  };
   const start = () => {
-    if (!video.isConnected || video.src || reduceMotion() || mobileViewport.matches) return;
-    video.src = video.dataset.videoSrc || staticHeroVideo;
+    if (!video.isConnected || video.src || shouldUsePoster()) return;
+    // The Admin has one video field. Mobile uses the smaller bundled version
+    // so a custom desktop upload cannot silently become a large mobile download.
+    video.src = mobileViewport.matches ? mobileHeroVideo : (video.dataset.videoSrc || staticHeroVideo);
     video.load();
   };
   const watchVisibility = () => {
-    if (reduceMotion() || mobileViewport.matches || video.src || observer) return;
+    if (shouldUsePoster()) { stop(); return; }
+    if (video.src || observer) return;
     if (!('IntersectionObserver' in window)) { start(); return; }
     observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
       observer.disconnect();
       observer = null;
       start();
-    }, { rootMargin: '100px' });
+    }, { rootMargin: mobileViewport.matches ? '0px' : '100px' });
     observer.observe(video);
   };
+  video.addEventListener('canplay', () => {
+    if (!video.src || shouldUsePoster() || !video.paused) return;
+    // Muted inline autoplay is normally automatic; explicitly try for browsers
+    // that require play() after readiness, then restore the poster if denied.
+    try {
+      video.play()?.catch(() => {
+        if (video.src && video.paused) stop();
+      });
+    } catch {
+      if (video.paused) stop();
+    }
+  });
+  video.addEventListener('error', stop);
   watchVisibility();
   mobileViewport.addEventListener('change', watchVisibility);
   reducedMotion.addEventListener('change', watchVisibility);
+  connection?.addEventListener?.('change', watchVisibility);
 }
 
 // ---------- Spotlight (dynamic: product selected in Admin) ----------

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -63,8 +63,7 @@ async function bootPublic({ connected = true, products = [fixture], cart = [], h
   });
   await import('../../src/main.js');
   expect(onReady).toBeTypeOf('function');
-  onReady();
-  spy.mockRestore();
+  try { onReady(); } finally { spy.mockRestore(); }
   return document.querySelector('#catalog-rail');
 }
 
@@ -102,6 +101,13 @@ afterEach(() => {
 });
 
 describe('public catalog', () => {
+  it('keeps the mobile hero asset within a small download budget', () => {
+    const mobile = statSync(resolve('src/assets/video/iphone-17-hero-mobile.mp4')).size;
+    const desktop = statSync(resolve('src/assets/video/iphone-17-hero.mp4')).size;
+    expect(mobile).toBeLessThan(2_000_000);
+    expect(mobile).toBeLessThan(desktop / 5);
+  });
+
   it('loads the hero video only after visibility on a motion-capable desktop', async () => {
     let heroObserver;
     vi.stubGlobal('IntersectionObserver', class {
@@ -132,7 +138,37 @@ describe('public catalog', () => {
     expect(document.querySelector('#hero-video').getAttribute('src')).toBeNull();
   });
 
-  it('starts the deferred hero video when a mobile viewport becomes desktop-sized', async () => {
+  it('loads the smaller video only after visibility on a motion-capable mobile viewport', async () => {
+    let heroObserver;
+    let heroObserverOptions;
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn((query) => ({ matches: query.includes('max-width'), addEventListener() {} })),
+    });
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback, options) { this.callback = callback; this.options = options; }
+      observe(element) {
+        if (element.id === 'hero-video') {
+          heroObserver = this;
+          heroObserverOptions = this.options;
+        }
+      }
+      disconnect() {}
+    });
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    await bootPublic({ hero: true });
+    await vi.waitFor(() => expect(heroObserver).toBeDefined());
+    const video = document.querySelector('#hero-video');
+    expect(video.getAttribute('src')).toBeNull();
+    expect(heroObserverOptions.rootMargin).toBe('0px');
+    expect(load).not.toHaveBeenCalled();
+    heroObserver.callback([{ isIntersecting: true }]);
+    expect(video.getAttribute('src')).toContain('iphone-17-hero-mobile');
+    expect(load).toHaveBeenCalledTimes(1);
+    load.mockRestore();
+  });
+
+  it('selects the desktop video after mobile-to-desktop resize before visibility', async () => {
     let heroObserver;
     let mobile = true;
     const viewportListeners = [];
@@ -158,15 +194,129 @@ describe('public catalog', () => {
     await vi.waitFor(() => expect(catalog.hero).toHaveBeenCalledTimes(1));
     const video = document.querySelector('#hero-video');
     expect(video.getAttribute('src')).toBeNull();
-    expect(heroObserver).toBeUndefined();
+    expect(heroObserver).toBeDefined();
 
     mobile = false;
     viewportListeners.forEach((listener) => listener());
-    expect(heroObserver).toBeDefined();
     heroObserver.callback([{ isIntersecting: true }]);
     expect(video.getAttribute('src')).toContain('iphone-17-hero');
+    expect(video.getAttribute('src')).not.toContain('iphone-17-hero-mobile');
     expect(load).toHaveBeenCalledTimes(1);
     load.mockRestore();
+  });
+
+  it('selects the mobile video after desktop-to-mobile resize without a second download', async () => {
+    let heroObserver;
+    let mobile = false;
+    const viewportListeners = [];
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn((query) => query.includes('max-width')
+        ? { get matches() { return mobile; }, addEventListener: (_event, listener) => viewportListeners.push(listener) }
+        : { matches: false, addEventListener() {} }),
+    });
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback) { this.callback = callback; }
+      observe(element) { if (element.id === 'hero-video') heroObserver = this; }
+      disconnect() {}
+    });
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    await bootPublic({ hero: true });
+    await vi.waitFor(() => expect(heroObserver).toBeDefined());
+    mobile = true;
+    viewportListeners.forEach((listener) => listener());
+    heroObserver.callback([{ isIntersecting: true }]);
+    const video = document.querySelector('#hero-video');
+    expect(video.getAttribute('src')).toContain('iphone-17-hero-mobile');
+    mobile = false;
+    viewportListeners.forEach((listener) => listener());
+    expect(load).toHaveBeenCalledTimes(1);
+    load.mockRestore();
+  });
+
+  it('keeps the poster on a reduced-motion mobile viewport', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn(() => ({ matches: true, addEventListener() {} })),
+    });
+    await bootPublic({ hero: true });
+    await vi.waitFor(() => expect(catalog.hero).toHaveBeenCalledTimes(1));
+    expect(document.querySelector('#hero-video').getAttribute('src')).toBeNull();
+  });
+
+  it('keeps the poster when the device requests data saving', async () => {
+    vi.stubGlobal('navigator', { connection: { saveData: true } });
+    vi.stubGlobal('IntersectionObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn((query) => ({ matches: query.includes('max-width'), addEventListener() {} })),
+    });
+    await bootPublic({ hero: true });
+    await vi.waitFor(() => expect(catalog.hero).toHaveBeenCalledTimes(1));
+    expect(document.querySelector('#hero-video').getAttribute('src')).toBeNull();
+  });
+
+  it('stops and restores the poster if reduced motion becomes active during playback', async () => {
+    let heroObserver;
+    let reduced = false;
+    const motionListeners = [];
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn((query) => query.includes('max-width')
+        ? { matches: false, addEventListener() {} }
+        : { get matches() { return reduced; }, addEventListener: (_event, listener) => motionListeners.push(listener) }),
+    });
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback) { this.callback = callback; }
+      observe(element) { if (element.id === 'hero-video') heroObserver = this; }
+      disconnect() {}
+    });
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    await bootPublic({ hero: true });
+    await vi.waitFor(() => expect(heroObserver).toBeDefined());
+    const video = document.querySelector('#hero-video');
+    heroObserver.callback([{ isIntersecting: true }]);
+    expect(video.getAttribute('src')).toContain('iphone-17-hero');
+    reduced = true;
+    motionListeners.forEach((listener) => listener());
+    expect(video.getAttribute('src')).toBeNull();
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledTimes(2);
+    load.mockRestore();
+    pause.mockRestore();
+  });
+
+  it('returns to the poster if mobile autoplay is denied', async () => {
+    let heroObserver;
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn((query) => ({ matches: query.includes('max-width'), addEventListener() {} })),
+    });
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback) { this.callback = callback; }
+      observe(element) { if (element.id === 'hero-video') heroObserver = this; }
+      disconnect() {}
+    });
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValue(new DOMException('blocked', 'NotAllowedError'));
+    await bootPublic({ hero: true });
+    await vi.waitFor(() => expect(heroObserver).toBeDefined());
+    const video = document.querySelector('#hero-video');
+    video.setAttribute('poster', '/poster.jpg');
+    heroObserver.callback([{ isIntersecting: true }]);
+    video.dispatchEvent(new Event('canplay'));
+    await vi.waitFor(() => expect(video.getAttribute('src')).toBeNull());
+    expect(video.getAttribute('poster')).toBe('/poster.jpg');
+    expect(play).toHaveBeenCalledTimes(1);
+    load.mockRestore();
+    pause.mockRestore();
+    play.mockRestore();
   });
 
   it('renders Supabase products when returned', async () => {
