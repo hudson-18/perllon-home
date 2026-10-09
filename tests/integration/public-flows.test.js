@@ -101,6 +101,29 @@ afterEach(() => {
 });
 
 describe('public catalog', () => {
+  it.each([[1080, 1920], [720, 900], [1080, 1440]])('uses %sx%s video geometry for playback and the poster', async (width, height) => {
+    catalog.configured.mockReturnValue(false);
+    document.body.innerHTML = '<div class="hero-phone"><video id="hero-video"></video></div>';
+    const video = document.querySelector('#hero-video');
+    const { initHero } = await import('../../src/public/content.js');
+    await initHero({ reduceMotion: () => true });
+    expect(video.style.getPropertyValue('--hero-media-ratio')).toBe('');
+    Object.defineProperties(video, {
+      videoWidth: { configurable: true, value: width },
+      videoHeight: { configurable: true, value: height },
+    });
+    video.dispatchEvent(new Event('loadedmetadata'));
+    expect(video.style.getPropertyValue('--hero-media-ratio')).toBe(`${width} / ${height}`);
+    // A return to the poster must retain the geometry learned from the file.
+    Object.defineProperties(video, {
+      videoWidth: { configurable: true, value: 0 },
+      videoHeight: { configurable: true, value: 0 },
+    });
+    video.dispatchEvent(new Event('loadedmetadata'));
+    expect(video.style.getPropertyValue('--hero-media-ratio')).toBe(`${width} / ${height}`);
+    expect(video.hasAttribute('src')).toBe(false);
+  });
+
   it('keeps the mobile hero asset within a small download budget', () => {
     const mobile = statSync(resolve('src/assets/video/iphone-17-hero-mobile.mp4')).size;
     const desktop = statSync(resolve('src/assets/video/iphone-17-hero.mp4')).size;

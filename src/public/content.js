@@ -9,6 +9,15 @@ const $ = (s, c = document) => c.querySelector(s);
 
 // The poster remains visible until the video can actually be used.
 function activateHeroVideo(video, reduceMotion) {
+  // Use the file's dimensions for both playback and its native poster. Keeping
+  // the ratio after src removal also prevents a size jump on autoplay failure.
+  const syncMediaRatio = () => {
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      video.style.setProperty('--hero-media-ratio', `${video.videoWidth} / ${video.videoHeight}`);
+    }
+  };
+  video.addEventListener('loadedmetadata', syncMediaRatio);
+  syncMediaRatio();
   const mobileViewport = window.matchMedia('(max-width: 560px)');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const connection = navigator.connection;
