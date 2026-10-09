@@ -108,8 +108,9 @@
 }
 .hero-phone {
   position: relative;
-  width: min(355px, 100%);
-  aspect-ratio: 3/4;
+  width: min(360px, 100%);
+  /* With contain, stage height sets the visible size of portrait video. */
+  aspect-ratio: 5/6;
   border-radius: 36px;
   overflow: hidden;
   box-shadow: 0 60px 120px -30px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.08);
@@ -153,7 +154,7 @@
   .hero-actions { flex-direction: column; align-items: center; max-width: 340px; margin: 0 auto var(--space-8); }
   .hero-actions .btn { width: auto; min-width: min(100%, 220px); }
   .hero-visual { order: initial; margin-bottom: 0; }
-  .hero-phone { width: min(300px, 78vw); border-radius: 32px; transform: none; }
+  .hero-phone { width: min(300px, 78vw); aspect-ratio: 3/4; border-radius: 32px; transform: none; }
   .hero-chip { display: none; }
 }
 
