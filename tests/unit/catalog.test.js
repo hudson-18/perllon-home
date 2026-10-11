@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const supabase = vi.hoisted(() => ({ getSupabase: vi.fn() }));
 vi.mock('../../src/lib/supabase.js', () => ({
@@ -34,7 +34,11 @@ function queryResult(result, onCall = () => {}) {
   return query;
 }
 
-beforeEach(() => supabase.getSupabase.mockReset());
+beforeEach(() => {
+  supabase.getSupabase.mockReset();
+  vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
+});
+afterEach(() => vi.unstubAllEnvs());
 
 describe('catalog data boundary', () => {
   it('reads stable specification keys and legacy labels without changing editor labels', () => {
