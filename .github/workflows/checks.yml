@@ -14,5 +14,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Dependency security audit (diagnostic)
+        run: npm audit --audit-level=high
+        continue-on-error: true
       - run: npm run test
       - run: npm run build
