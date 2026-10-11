@@ -111,6 +111,7 @@ export async function renderProductForm(id, runId, { root, shell, isCurrentNavig
         </div>
 
         <div style="display:flex;gap:12px;justify-content:flex-end">
+          ${!isNew ? '<button type="button" id="delete-product" class="btn btn-danger">Excluir produto</button>' : ''}
           <a href="#/products" class="btn">Cancelar</a>
           <button type="submit" class="btn btn-orange btn-lg">Salvar produto</button>
         </div>
@@ -260,6 +261,30 @@ export async function renderProductForm(id, runId, { root, shell, isCurrentNavig
       } finally {
         input.value = '';
         finishPending(input);
+      }
+    });
+
+    // Destructive action is only available while editing and requires confirmation.
+    $('#delete-product')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      if (!window.confirm(`Excluir permanentemente "${p.name}"? Esta ação não pode ser desfeita. Para ocultar, escolha Inativo.`)) return;
+      if (!beginPending(button, 'Excluindo…')) return;
+      try {
+        await admin.deleteProduct(id);
+        const paths = [...new Set(images.map((im) => im.storage_path).filter(Boolean))];
+        let failed = 0;
+        for (const path of paths) {
+          try { await deleteProductImage(path); }
+          catch (storageError) { failed++; console.error('Falha ao limpar imagem após exclusão:', storageError); }
+        }
+        if (failed) toast(`Produto excluído, mas ${failed} imagem(ns) exigem limpeza no Storage.`, 'error');
+        else toast('Produto excluído permanentemente.', 'success');
+        if (location.hash === '#/products') router();
+        else location.hash = '#/products';
+      } catch (error) {
+        reportAdminError(error, 'Não foi possível excluir o produto. Tente novamente.');
+      } finally {
+        finishPending(button);
       }
     });
 
