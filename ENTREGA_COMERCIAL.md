@@ -29,6 +29,8 @@ Este documento organiza a apresentação, o treinamento e o aceite da solução 
 
 - Nome/identidade da empresa, logo, imagens e vídeos autorizados para uso.
 - Revisão factual de localização, WhatsApp, atendimento, descrição dos serviços e produtos.
+- Confirmar **CEP** (site: 59052-210; listagens públicas: 59056-100) e **horário** (fontes públicas divergem do site). Sem confirmação, não alterar as informações oficiais da loja.
+- Abrir o mapa incorporado no celular e no computador, confirmando que aponta para a unidade correta.
 - Aprovação de política de privacidade adequada ao uso real de dados e WhatsApp.
 - Definição e controle de domínio, hospedagem e projeto Supabase: indicar titular de cada conta.
 - Criação de usuário administrador da empresa e ativação de proteções de conta.
