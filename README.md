@@ -96,9 +96,9 @@ Acesse `http://localhost:3000/admin.html`.
 
 | Role | Permissões |
 |------|-----------|
-| `admin` | Tudo: produtos, imagens, destaque, auditoria, gerenciamento de usuários |
-| `editor` | Gerencia catálogo, imagens e destaque (sem gerenciar usuários) |
-| `viewer` | Somente leitura do painel |
+| `admin` | Catálogo, imagens, destaque, hero e auditoria (as contas administrativas são provisionadas no Supabase) |
+| `editor` | Gerencia catálogo, imagens e destaque, sujeito às políticas RLS |
+| `viewer` | Somente leitura permitida no banco por RLS; botões de escrita ainda podem aparecer na interface |
 
 ## Preço e moeda
 
