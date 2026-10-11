@@ -5,8 +5,8 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 
 ## Funcional (site público)
 - [x] Home renderiza (hero, spotlight, serviços, catálogo, diferenciais, sobre, localização, CTA, footer)
-- [x] Catálogo carrega os 7 produtos canônicos do Supabase (com fallback estático)
-- [x] Spotlight → iPhone 17 (ativo)
+- [x] Catálogo busca os produtos ativos do Supabase (com fallback estático no modo demonstração)
+- [x] Spotlight administrável (produto ativo real configurado pelo dono)
 - [x] Carrinho: adicionar / quantidade / remover / subtotal / estado vazio
 - [x] Modal de identificação (nome) + `Enter`/`Escape`/backdrop + focus
 - [x] Checkout gera mensagem de WhatsApp com dados reais (sem afirmar disponibilidade confirmada)
@@ -17,6 +17,8 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 - [x] `/admin.html` carrega (segundo entry point Vite)
 - [x] Login/logout/sessão (Supabase Auth)
 - [x] CRUD de produto, marcas, categorias, especificações, imagens, spotlight
+- [x] Botão Excluir produto no formulário de edição, com confirmação e limpeza de imagens (código e testes)
+- [ ] Verificar exclusão numa instância de teste usando produto descartável
 - [x] Proteção real por RLS (não só "esconder" no frontend)
 - [ ] Verificar login/catálogo/upload no ambiente de produção (após deploy)
 
@@ -25,7 +27,7 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 - [x] Anon não escreve produtos/audit/storage (testado: INSERT 401, UPDATE/DELETE 0 rows)
 - [x] Audit logs append-only (só INSERT staff + SELECT admin)
 - [x] Sem secrets no código/dist; `.env.local`/`.env.production` fora do Git
-- [x] `npm audit` = 0 vulnerabilidades
+- [x] `npm audit --audit-level=high` aprovado em CI após correção de source-map-js 1.2.2 (11/10/2026)
 - [x] XSS: dados dinâmicos escapados antes de `innerHTML`
 - [x] Headers para Netlify/Cloudflare definidos em `public/_headers`; o build injeta somente a origem de `VITE_SUPABASE_URL` na CSP
 - [ ] Ativar **Leaked Password Protection** em Authentication → Settings no Supabase (configuração de projeto; não é migration SQL)
@@ -58,9 +60,11 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 ## Build
 - [x] `npm run build` limpo (index.html + admin.html + assets + OG/robots/sitemap/404)
 - [x] `node --check` OK em todos os módulos JS
+- [x] GitHub Actions na main: 84 testes e build de produção aprovados (11/10/2026)
 
 ## Deploy (ação manual necessária)
-- [ ] Escolher host ($0): Vercel ou Netlify (recomendado)
+- [x] Hospedagem Cloudflare Pages usada no projeto, segundo README
+- [ ] Confirmar que o último commit da main foi realmente publicado na Cloudflare Pages
 - [ ] Criar projeto no host e conectar o repositório Git
 - [ ] Definir `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no host
 - [ ] Publicar e confirmar HTTPS + domínio provisório
@@ -70,6 +74,6 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 ## Supabase (já provisionado)
 - [x] Migrations 0001–0015 e troca atômica de especificações aplicadas
 - [x] Hardening de Storage, auditoria, helpers SQL e CTA aplicado
-- [x] 7 produtos canônicos + Spotlight iPhone 17
+- [x] Seed de 7 produtos canônicos + catálogo real confirmado com 8 produtos ativos e destaque administrável em 11/10/2026
 - [x] Bucket `product-images` público; escrita staff-only
 - [x] Admin real (`Administrador`) preservado
