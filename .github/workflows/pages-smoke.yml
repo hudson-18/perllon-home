@@ -1,0 +1,23 @@
+name: Published website smoke check
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  verify-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check homepage and admin page on Cloudflare Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://perllon-home.pages.dev'
+          curl --fail --location --silent --show-error --max-time 20 "$base/" -o home.html
+          curl --fail --location --silent --show-error --max-time 20 "$base/admin.html" -o admin.html
+          grep -q 'PERLLON' home.html
+          grep -q 'admin-root' admin.html
+          admin_asset=$(grep -oE '/assets/admin-[^"]+\.js' admin.html | head -n 1)
+          test -n "$admin_asset"
+          curl --fail --location --silent --show-error --max-time 20 "$base$admin_asset" -o admin.js
+          grep -q 'Excluir produto' admin.js
+          echo 'Site e botão Excluir produto publicados na Cloudflare Pages.'
