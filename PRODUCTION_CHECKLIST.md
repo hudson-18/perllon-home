@@ -40,8 +40,9 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 - [x] Twitter card
 - [x] JSON-LD `ElectronicsStore` (Organization/LocalBusiness) — sem rating/review inventado
 - [x] `robots.txt` (permite site público, `Disallow: /admin.html`)
-- [x] `sitemap.xml` (somente páginas públicas; placeholder de domínio)
-- [ ] Trocar o placeholder `perllon.com.br` pelo domínio real no canonical/OG/sitemap quando o domínio existir
+- [x] `sitemap.xml` (somente página inicial pública, no domínio atual Cloudflare Pages)
+- [x] Canonical, Open Graph, Twitter image, dados estruturados, robots e sitemap com `perllon-home.pages.dev`
+- [ ] Atualizar esses endereços se a empresa comprar domínio próprio no futuro
 
 ## Assets / Performance
 - [x] Favicon SVG + `apple-touch-icon`
@@ -64,12 +65,13 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 
 ## Deploy (ação manual necessária)
 - [x] Hospedagem Cloudflare Pages usada no projeto, segundo README
-- [ ] Confirmar que o último commit da main foi realmente publicado na Cloudflare Pages
-- [ ] Criar projeto no host e conectar o repositório Git
-- [ ] Definir `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` no host
-- [ ] Publicar e confirmar HTTPS + domínio provisório
+- [x] Confirmada a presença do botão Excluir produto no JavaScript publicado pela Cloudflare Pages (11/10/2026)
+- [ ] Confirmar a publicação das últimas mudanças de SEO no endereço da Cloudflare Pages
+- [x] Cloudflare Pages já publica o site em `https://perllon-home.pages.dev/`
+- [x] Integração Supabase da loja e painel confirmada em funcionamento pelo desenvolvedor
+- [x] Site publicado com HTTPS em `perllon-home.pages.dev`
 - [ ] Testar site público + admin em produção
-- [ ] (Futuro) conectar domínio real + atualizar canonical/OG/sitemap
+- [ ] (Opcional futuro) conectar domínio personalizado mediante pedido da empresa
 
 ## Supabase (já provisionado)
 - [x] Migrations 0001–0015 e troca atômica de especificações aplicadas
