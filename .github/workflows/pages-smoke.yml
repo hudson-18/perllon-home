@@ -7,17 +7,30 @@ jobs:
   verify-pages:
     runs-on: ubuntu-latest
     steps:
-      - name: Check homepage and admin page on Cloudflare Pages
+      - name: Check published home, SEO metadata, and admin UI on Cloudflare Pages
         shell: bash
         run: |
           set -euo pipefail
           base='https://perllon-home.pages.dev'
-          curl --fail --location --silent --show-error --max-time 20 "$base/" -o home.html
-          curl --fail --location --silent --show-error --max-time 20 "$base/admin.html" -o admin.html
-          grep -q 'PERLLON' home.html
-          grep -q 'admin-root' admin.html
-          admin_asset=$(grep -oE '/assets/admin-[^"]+\.js' admin.html | head -n 1)
-          test -n "$admin_asset"
-          curl --fail --location --silent --show-error --max-time 20 "$base$admin_asset" -o admin.js
-          grep -q 'Excluir produto' admin.js
-          echo 'Site e botão Excluir produto publicados na Cloudflare Pages.'
+          published=false
+          # Cloudflare builds asynchronously after the GitHub push.
+          for attempt in {1..12}; do
+            curl --fail --location --silent --show-error --max-time 20 "$base/" -o home.html || true
+            curl --fail --location --silent --show-error --max-time 20 "$base/admin.html" -o admin.html || true
+            curl --fail --location --silent --show-error --max-time 20 "$base/sitemap.xml" -o sitemap.xml || true
+            if grep -q 'https://perllon-home.pages.dev/' home.html 2>/dev/null \
+              && grep -q '<loc>https://perllon-home.pages.dev/</loc>' sitemap.xml 2>/dev/null \
+              && grep -q 'admin-root' admin.html 2>/dev/null; then
+              admin_asset=$(grep -oE '/assets/admin-[^"]+\.js' admin.html | head -n 1 || true)
+              if test -n "$admin_asset" \
+                && curl --fail --location --silent --show-error --max-time 20 "$base$admin_asset" -o admin.js \
+                && grep -q 'Excluir produto' admin.js; then
+                published=true
+                break
+              fi
+            fi
+            echo "Cloudflare not updated yet; waiting (attempt $attempt/12)"
+            sleep 10
+          done
+          test "$published" = true
+          echo 'Current canonical URL, sitemap, and delete button verified on Cloudflare Pages.'
