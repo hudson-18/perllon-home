@@ -150,8 +150,8 @@ localhost). Em produção o motion roda normalmente e respeita
 `prefers-reduced-motion`.
 
 ### Domínio
-O domínio real (`perllon.com.br` é o placeholder usado no sitemap/canonical)
-ainda não foi comprado. Quando for:
+O endereço público atual é `https://perllon-home.pages.dev/` e está utilizado
+no sitemap/canonical. Caso a empresa opte por um domínio próprio no futuro:
 1. Conectar o domínio no host (DNS CNAME/A).
 2. Atualizar `canonical`, `og:url` e o `<loc>` do `sitemap.xml`.
 3. Confirmar HTTPS e redirecionamento HTTP→HTTPS.
