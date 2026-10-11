@@ -5,4 +5,4 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   X-Frame-Options: DENY
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dB+UUVMInNLd4lK0U32VVcyzpeusWhJhj1YV5NJIODE='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: __SUPABASE_ORIGIN__; media-src 'self' blob: __SUPABASE_ORIGIN__; connect-src 'self' __SUPABASE_ORIGIN__; frame-src https://www.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-dB+UUVMInNLd4lK0U32VVcyzpeusWhJhj1YV5NJIODE='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: __SUPABASE_ORIGIN__; media-src 'self' blob: __SUPABASE_ORIGIN__; connect-src 'self' __SUPABASE_ORIGIN__; frame-src https://www.google.com https://maps.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
