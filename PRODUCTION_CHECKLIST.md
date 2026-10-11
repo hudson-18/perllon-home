@@ -16,11 +16,12 @@ verificados; `[ ]` exigem ação (principalmente do responsável pelo deploy).
 ## Admin
 - [x] `/admin.html` carrega (segundo entry point Vite)
 - [x] Login/logout/sessão (Supabase Auth)
-- [x] CRUD de produto, marcas, categorias, especificações, imagens, spotlight
+- [x] Cadastro/edição/exclusão de produtos, inclusão de marcas e categorias, especificações, imagens, destaque e hero
 - [x] Botão Excluir produto no formulário de edição, com confirmação e limpeza de imagens (código e testes)
 - [ ] Verificar exclusão numa instância de teste usando produto descartável
 - [x] Proteção real por RLS (não só "esconder" no frontend)
-- [ ] Verificar login/catálogo/upload no ambiente de produção (após deploy)
+- [x] Login, catálogo, upload, destaque e hero relatados como funcionais pelo desenvolvedor no ambiente publicado
+- [ ] Revalidar esses fluxos com o responsável da empresa durante o aceite
 
 ## Segurança
 - [x] RLS habilitado em todas as tabelas (deny por padrão)
