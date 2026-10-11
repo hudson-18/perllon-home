@@ -2,6 +2,6 @@
 <!-- A home é a única página pública indexável neste deployment. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://perllon.com.br/</loc>
+    <loc>https://perllon-home.pages.dev/</loc>
   </url>
 </urlset>
