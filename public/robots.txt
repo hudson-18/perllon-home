@@ -10,4 +10,4 @@ Allow: /
 Disallow: /admin.html
 
 # Apenas páginas com URLs próprias e indexáveis entram no sitemap.
-Sitemap: https://perllon.com.br/sitemap.xml
+Sitemap: https://perllon-home.pages.dev/sitemap.xml
