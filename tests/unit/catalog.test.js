@@ -99,4 +99,11 @@ describe('catalog data boundary', () => {
     expect(calls).toContainEqual(['in', ['id', ['db-product-id']]]);
     expect(fresh['db-product-id'].price_cents).toBe(560050);
   });
+
+  it('handles missing or unconfigured VITE_SUPABASE_URL gracefully', () => {
+    vi.stubEnv('VITE_SUPABASE_URL', '');
+    const product = normalizeProduct(row, row.product_specifications);
+    expect(product.image).toBeNull();
+    expect(product.images[0].url).toBeNull();
+  });
 });

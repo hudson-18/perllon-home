@@ -8,7 +8,9 @@ export function toast(msg, type = '') {
   if (old) old.remove();
   clearTimeout(toastTimer);
   const el = document.createElement('div');
-  el.className = `toast-admin ${type}`;
+  el.className = `toast-admin ${type}`.trim();
+  el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  el.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
   el.textContent = msg;
   document.body.appendChild(el);
   toastTimer = setTimeout(() => el.remove(), 3200);
